@@ -25,7 +25,7 @@
           <span class="upload-subtitle">支持 JPG / JPEG / PNG / HEIC / HEIF</span>
           <span class="upload-note">HEIC/HEIF 会先在浏览器本地转码，再继续调色</span>
         </label>
-        <input id="photoInput" type="file" accept="image/jpeg,image/jpg,image/png,image/heic,image/heif" hidden>
+        <input id="photoInput" type="file" accept="image/jpeg,image/jpg,image/png,image/heic,image/heif" multiple hidden>
       </section>
 
       <section id="statusPanel" class="status-panel" aria-live="polite">
@@ -52,8 +52,17 @@
         </article>
       </section>
 
+      <section id="batchSection" class="batch-section" aria-label="批量调色结果">
+        <div class="section-head">
+          <h2>批量结果</h2>
+          <span id="batchCount" class="batch-count">0 张</span>
+        </div>
+        <div id="batchResults" class="batch-results"></div>
+      </section>
+
       <div class="actions">
         <button id="saveButton" class="save-button" type="button" disabled>保存高质量图片</button>
+        <button id="saveAllButton" class="save-button secondary-button" type="button" disabled>保存全部图片</button>
         <a id="downloadLink" class="download-link" download="cream-tone-photo.jpg" hidden>下载图片</a>
       </div>
 

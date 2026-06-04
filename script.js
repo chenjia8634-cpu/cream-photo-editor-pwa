@@ -7,63 +7,188 @@ const sourceCard = sourceCanvas.closest(".preview-card");
 const resultCard = resultCanvas.closest(".preview-card");
 const statusText = document.querySelector("#statusText");
 const saveButton = document.querySelector("#saveButton");
+const saveAllButton = document.querySelector("#saveAllButton");
 const downloadLink = document.querySelector("#downloadLink");
+const batchSection = document.querySelector("#batchSection");
+const batchResults = document.querySelector("#batchResults");
+const batchCount = document.querySelector("#batchCount");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
 const JPEG_QUALITY = 0.98;
 
-let latestBlobUrl = "";
-let latestFileName = "cream-tone-photo.jpg";
 let sourcePreviewUrl = "";
 let resultPreviewUrl = "";
+let batchItems = [];
 
 input.addEventListener("change", async (event) => {
-  const file = event.target.files && event.target.files[0];
-  if (!file) return;
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
 
   resetOutput();
-  setStatus("正在读取照片...");
+  setStatus(`已选择 ${files.length} 张照片，正在开始本地批量调色...`);
 
-  try {
-    if (!isSupportedImage(file)) {
-      throw new Error("请选择 JPG、JPEG、PNG、HEIC 或 HEIF 图片。");
+  let successCount = 0;
+
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+
+    try {
+      setStatus(`正在处理第 ${index + 1} / ${files.length} 张：${file.name}`);
+      const item = await processFile(file, index, files.length);
+      addBatchItem(item);
+      successCount += 1;
+    } catch (error) {
+      console.error(error);
+      addBatchError(file.name, error.message || "处理失败");
     }
+  }
 
-    const imageFile = await normalizeImageFile(file);
-    const bitmap = await decodeImage(imageFile);
-    const size = fitSize(bitmap.width, bitmap.height, MAX_EXPORT_EDGE);
+  input.value = "";
 
-    drawSource(bitmap, size.width, size.height);
-    await updatePreviewImage(sourceCanvas, sourcePreview, "source");
-    setStatus("正在本地调色...");
-
-    applyCreamPreset(sourceCanvas, resultCanvas);
-    resultCard.classList.add("has-image");
-    await updatePreviewImage(resultCanvas, resultPreview, "result");
-
-    const outputSize = await prepareDownload(file.name);
-    const inputText = `${bitmap.width}×${bitmap.height} / ${formatBytes(file.size)}`;
-    const outputText = `${size.width}×${size.height} / ${formatBytes(outputSize)}`;
-    const compressedHint = file.size < 500 * 1024
-      ? " 原图文件偏小，可能已经被微信或聊天软件压缩，建议从相册选择原图。"
-      : "";
-    setStatus(`调色完成。原图 ${inputText}，输出 ${outputText}。${compressedHint}照片只在浏览器本地处理。`);
-  } catch (error) {
-    console.error(error);
-    resetOutput();
-    setStatus(error.message || "照片处理失败，请换一张 JPG 或 PNG 再试。");
+  if (successCount > 0) {
+    saveButton.disabled = false;
+    saveAllButton.disabled = false;
+    const totalSize = batchItems.reduce((sum, item) => sum + item.blob.size, 0);
+    setStatus(`批量调色完成：成功 ${successCount} / ${files.length} 张，输出合计 ${formatBytes(totalSize)}。照片只在浏览器本地处理。`);
+  } else {
+    setStatus("没有照片处理成功，请换 JPG、PNG、HEIC 或 HEIF 再试。");
   }
 });
 
 saveButton.addEventListener("click", async () => {
-  if (!latestBlobUrl) return;
+  const latestItem = batchItems[batchItems.length - 1];
+  if (latestItem) await saveBatchItem(latestItem);
+});
 
-  const canShareFile = Boolean(navigator.canShare && window.File);
-  const blob = await fetch(latestBlobUrl).then((response) => response.blob());
-  const file = new File([blob], latestFileName, { type: "image/jpeg" });
+saveAllButton.addEventListener("click", async () => {
+  if (!batchItems.length) return;
 
-  if (canShareFile && navigator.canShare({ files: [file] })) {
+  const files = batchItems.map((item) => new File([item.blob], item.name, { type: "image/jpeg" }));
+
+  if (navigator.canShare && navigator.share && navigator.canShare({ files })) {
+    try {
+      await navigator.share({
+        files,
+        title: "奶油感产品图",
+      });
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+    }
+  }
+
+  for (const item of batchItems) {
+    triggerDownload(item);
+    await wait(350);
+  }
+});
+
+async function processFile(file, index, total) {
+  if (!isSupportedImage(file)) {
+    throw new Error("请选择 JPG、JPEG、PNG、HEIC 或 HEIF 图片。");
+  }
+
+  const imageFile = await normalizeImageFile(file);
+  const bitmap = await decodeImage(imageFile);
+  const size = fitSize(bitmap.width, bitmap.height, MAX_EXPORT_EDGE);
+
+  drawSource(bitmap, size.width, size.height);
+  await updatePreviewImage(sourceCanvas, sourcePreview, "source");
+
+  setStatus(`正在调色第 ${index + 1} / ${total} 张：${file.name}`);
+  applyCreamPreset(sourceCanvas, resultCanvas);
+  resultCard.classList.add("has-image");
+  await updatePreviewImage(resultCanvas, resultPreview, "result");
+
+  const blob = await canvasToBlob(resultCanvas, "image/jpeg", JPEG_QUALITY);
+  const url = URL.createObjectURL(blob);
+  const previewUrl = await createPreviewUrl(resultCanvas);
+  const outputName = createOutputName(file.name);
+
+  downloadLink.href = url;
+  downloadLink.download = outputName;
+
+  return {
+    blob,
+    url,
+    previewUrl,
+    name: outputName,
+    originalName: file.name,
+    inputSize: file.size,
+    outputSize: blob.size,
+    inputWidth: bitmap.width,
+    inputHeight: bitmap.height,
+    outputWidth: size.width,
+    outputHeight: size.height,
+  };
+}
+
+function addBatchItem(item) {
+  batchItems.push(item);
+  batchSection.classList.add("has-results");
+  batchCount.textContent = `${batchItems.length} 张`;
+
+  const article = document.createElement("article");
+  article.className = "batch-item";
+
+  const image = document.createElement("img");
+  image.className = "batch-thumb";
+  image.alt = `${item.originalName} 调色预览`;
+  image.src = item.previewUrl;
+
+  const meta = document.createElement("div");
+  meta.className = "batch-meta";
+
+  const name = document.createElement("div");
+  name.className = "batch-name";
+  name.textContent = item.originalName;
+
+  const info = document.createElement("div");
+  info.className = "batch-info";
+  info.textContent = `${item.outputWidth}×${item.outputHeight} / ${formatBytes(item.outputSize)}`;
+
+  const link = document.createElement("a");
+  link.className = "item-download";
+  link.href = item.url;
+  link.download = item.name;
+  link.textContent = "下载";
+
+  meta.append(name, info, link);
+  article.append(image, meta);
+  batchResults.append(article);
+}
+
+function addBatchError(fileName, message) {
+  batchSection.classList.add("has-results");
+
+  const article = document.createElement("article");
+  article.className = "batch-item error-item";
+
+  const placeholder = document.createElement("div");
+  placeholder.className = "batch-thumb error-thumb";
+  placeholder.textContent = "失败";
+
+  const meta = document.createElement("div");
+  meta.className = "batch-meta";
+
+  const name = document.createElement("div");
+  name.className = "batch-name";
+  name.textContent = fileName;
+
+  const info = document.createElement("div");
+  info.className = "batch-info";
+  info.textContent = message;
+
+  meta.append(name, info);
+  article.append(placeholder, meta);
+  batchResults.append(article);
+}
+
+async function saveBatchItem(item) {
+  const file = new File([item.blob], item.name, { type: "image/jpeg" });
+
+  if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
         files: [file],
@@ -75,9 +200,23 @@ saveButton.addEventListener("click", async () => {
     }
   }
 
-  downloadLink.href = latestBlobUrl;
+  triggerDownload(item);
+}
+
+function triggerDownload(item) {
+  downloadLink.href = item.url;
+  downloadLink.download = item.name;
   downloadLink.click();
-});
+}
+
+function createOutputName(originalName) {
+  const baseName = originalName.replace(/\.[^.]+$/, "") || "photo";
+  return `${baseName}-cream-tone.jpg`;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 function isSupportedImage(file) {
   const type = file.type.toLowerCase();
@@ -364,21 +503,21 @@ function hueToRgb(p, q, t) {
   return p;
 }
 
-async function prepareDownload(originalName) {
-  const baseName = originalName.replace(/\.[^.]+$/, "") || "photo";
-  latestFileName = `${baseName}-cream-tone.jpg`;
+async function updatePreviewImage(canvas, image, type) {
+  const url = await createPreviewUrl(canvas);
 
-  if (latestBlobUrl) URL.revokeObjectURL(latestBlobUrl);
+  if (type === "source") {
+    if (sourcePreviewUrl) URL.revokeObjectURL(sourcePreviewUrl);
+    sourcePreviewUrl = url;
+  } else {
+    if (resultPreviewUrl) URL.revokeObjectURL(resultPreviewUrl);
+    resultPreviewUrl = url;
+  }
 
-  const blob = await canvasToBlob(resultCanvas, "image/jpeg", JPEG_QUALITY);
-  latestBlobUrl = URL.createObjectURL(blob);
-  downloadLink.href = latestBlobUrl;
-  downloadLink.download = latestFileName;
-  saveButton.disabled = false;
-  return blob.size;
+  image.src = url;
 }
 
-async function updatePreviewImage(canvas, image, type) {
+async function createPreviewUrl(canvas) {
   const previewSize = fitSize(canvas.width, canvas.height, MAX_PREVIEW_EDGE);
   const previewCanvas = document.createElement("canvas");
   const context = previewCanvas.getContext("2d");
@@ -390,17 +529,7 @@ async function updatePreviewImage(canvas, image, type) {
   context.drawImage(canvas, 0, 0, previewSize.width, previewSize.height);
 
   const blob = await canvasToBlob(previewCanvas, "image/jpeg", 0.9);
-  const url = URL.createObjectURL(blob);
-
-  if (type === "source") {
-    if (sourcePreviewUrl) URL.revokeObjectURL(sourcePreviewUrl);
-    sourcePreviewUrl = url;
-  } else {
-    if (resultPreviewUrl) URL.revokeObjectURL(resultPreviewUrl);
-    resultPreviewUrl = url;
-  }
-
-  image.src = url;
+  return URL.createObjectURL(blob);
 }
 
 function canvasToBlob(canvas, type, quality) {
@@ -417,15 +546,20 @@ function canvasToBlob(canvas, type, quality) {
 
 function resetOutput() {
   saveButton.disabled = true;
+  saveAllButton.disabled = true;
   sourceCard.classList.remove("has-image");
   resultCard.classList.remove("has-image");
   sourcePreview.removeAttribute("src");
   resultPreview.removeAttribute("src");
+  batchSection.classList.remove("has-results");
+  batchResults.textContent = "";
+  batchCount.textContent = "0 张";
 
-  if (latestBlobUrl) {
-    URL.revokeObjectURL(latestBlobUrl);
-    latestBlobUrl = "";
-  }
+  batchItems.forEach((item) => {
+    URL.revokeObjectURL(item.url);
+    URL.revokeObjectURL(item.previewUrl);
+  });
+  batchItems = [];
 
   if (sourcePreviewUrl) {
     URL.revokeObjectURL(sourcePreviewUrl);
