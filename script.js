@@ -16,15 +16,14 @@ const batchCount = document.querySelector("#batchCount");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v1.9";
-const MAX_VIDEO_EDGE = 1440;
-const VIDEO_FPS = 30;
-const VIDEO_BITRATE = 16_000_000;
+const APP_VERSION = "v2.0";
 const JPEG_QUALITY = 0.98;
 
 let sourcePreviewUrl = "";
 let resultPreviewUrl = "";
 let batchItems = [];
+let ffmpegInstance = null;
+let ffmpegHelpers = null;
 
 input.addEventListener("change", async (event) => {
   const files = Array.from(event.target.files || []);
@@ -136,99 +135,103 @@ async function processFile(file, index, total) {
 }
 
 async function processVideoFile(file, index, total) {
-  if (!supportsVideoExport()) {
-    throw new Error("当前浏览器不支持视频导出，请在较新的 Safari 或 Chrome 中打开。");
-  }
+  setStatus(`正在加载高质量视频引擎，首次使用会稍慢...`);
 
-  setStatus(`正在读取视频第 ${index + 1} / ${total} 个：${file.name}`);
+  const [metadata, posterUrl, ffmpeg] = await Promise.all([
+    readVideoMetadata(file),
+    createVideoPosterUrl(file),
+    loadFfmpeg(),
+  ]);
 
-  const sourceUrl = URL.createObjectURL(file);
-  const video = document.createElement("video");
-  video.src = sourceUrl;
-  video.muted = false;
-  video.volume = 1;
-  video.playsInline = true;
-  video.preload = "auto";
-  video.crossOrigin = "anonymous";
+  const inputName = `input-${Date.now()}-${index}.${getVideoInputExtension(file.name)}`;
+  const outputName = createVideoOutputName(file.name, "video/mp4");
+  const outputFsName = `output-${Date.now()}-${index}.mp4`;
+  const helpers = ffmpegHelpers;
+
+  ffmpeg.on("progress", ({ progress }) => {
+    const percent = Math.min(99, Math.max(0, Math.round((progress || 0) * 100)));
+    setStatus(`正在高质量调色视频第 ${index + 1} / ${total} 个：${file.name}，${percent}%`);
+  });
+
+  await ffmpeg.writeFile(inputName, await helpers.fetchFile(file));
+
+  const filter = [
+    "eq=brightness=0.035:contrast=0.96:saturation=0.94:gamma=0.98",
+    "colorbalance=rs=0.025:gs=-0.004:bs=-0.018:rm=0.012:gm=-0.002:bm=-0.01",
+    "curves=all='0/0 0.25/0.28 0.65/0.68 0.9/0.88 1/0.97'",
+  ].join(",");
+
+  const command = [
+    "-i", inputName,
+    "-map", "0:v:0",
+    "-map", "0:a?",
+    "-vf", filter,
+    "-c:v", "libx264",
+    "-preset", "slow",
+    "-crf", "16",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "copy",
+    "-movflags", "+faststart",
+    outputFsName,
+  ];
 
   try {
-    await waitForVideoMetadata(video);
-
-    const size = fitSize(video.videoWidth, video.videoHeight, MAX_VIDEO_EDGE);
-    sourceCanvas.width = size.width;
-    sourceCanvas.height = size.height;
-    resultCanvas.width = size.width;
-    resultCanvas.height = size.height;
-
-    const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
-    await seekVideo(video, getVideoStartTime(video));
-    drawVideoFrame(video, sourceContext, size);
-    const posterUrl = await createPreviewUrl(resultCanvas);
-
-    const outputStream = resultCanvas.captureStream(VIDEO_FPS);
-    const audioTrackCount = addOriginalAudioTracks(video, outputStream);
-    const mimeType = getSupportedVideoMimeType();
-    const recorderOptions = { videoBitsPerSecond: VIDEO_BITRATE };
-    if (mimeType) recorderOptions.mimeType = mimeType;
-    const recorder = new MediaRecorder(outputStream, recorderOptions);
-    const chunks = [];
-
-    recorder.addEventListener("dataavailable", (event) => {
-      if (event.data && event.data.size) chunks.push(event.data);
-    });
-
-    const stopped = new Promise((resolve) => {
-      recorder.addEventListener("stop", resolve, { once: true });
-    });
-
-    recorder.start(1000);
-    drawVideoFrame(video, sourceContext, size);
-    await wait(80);
-    video.currentTime = getVideoStartTime(video);
-    const audioPlaybackAllowed = await playVideoForRecording(video);
-
-    await renderVideoFrames(video, sourceContext, size, file.name, index, total);
-    setStatus(`正在生成调色后视频：${file.name}`);
-
-    await stopRecorder(recorder, stopped);
-
-    const outputType = recorder.mimeType || mimeType || "video/mp4";
-    const blob = new Blob(chunks, { type: outputType });
-    const url = URL.createObjectURL(blob);
-    const previewUrl = url;
-    const outputName = createVideoOutputName(file.name, outputType);
-
-    video.pause();
-    videoPreview.src = url;
-    videoPreview.poster = posterUrl;
-    videoPreview.muted = false;
-    resultCard.classList.add("has-video");
-    resultCard.classList.remove("has-image");
-    sourceCard.classList.remove("has-image");
-
-    downloadLink.href = url;
-    downloadLink.download = outputName;
-
-    return {
-      blob,
-      url,
-      previewUrl,
-      posterUrl,
-      name: outputName,
-      type: outputType,
-      kind: "video",
-      audioPreserved: audioTrackCount > 0 && audioPlaybackAllowed,
-      originalName: file.name,
-      inputSize: file.size,
-      outputSize: blob.size,
-      inputWidth: video.videoWidth,
-      inputHeight: video.videoHeight,
-      outputWidth: size.width,
-      outputHeight: size.height,
-    };
-  } finally {
-    URL.revokeObjectURL(sourceUrl);
+    await ffmpeg.exec(command);
+  } catch (error) {
+    console.warn("Audio copy failed, retrying with AAC audio:", error);
+    await safeDeleteFfmpegFile(ffmpeg, outputFsName);
+    await ffmpeg.exec([
+      "-i", inputName,
+      "-map", "0:v:0",
+      "-map", "0:a?",
+      "-vf", filter,
+      "-c:v", "libx264",
+      "-preset", "slow",
+      "-crf", "16",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-b:a", "192k",
+      "-movflags", "+faststart",
+      outputFsName,
+    ]);
   }
+
+  setStatus(`正在生成调色后视频：${file.name}`);
+  const data = await ffmpeg.readFile(outputFsName);
+  const blob = new Blob([data.buffer], { type: "video/mp4" });
+  const url = URL.createObjectURL(blob);
+
+  await safeDeleteFfmpegFile(ffmpeg, inputName);
+  await safeDeleteFfmpegFile(ffmpeg, outputFsName);
+
+  videoPreview.src = url;
+  videoPreview.poster = posterUrl;
+  videoPreview.muted = false;
+  videoPreview.preload = "metadata";
+  resultCard.classList.add("has-video");
+  resultCard.classList.remove("has-image");
+  sourceCard.classList.remove("has-image");
+
+  downloadLink.href = url;
+  downloadLink.download = outputName;
+
+  return {
+    blob,
+    url,
+    previewUrl: url,
+    posterUrl,
+    name: outputName,
+    type: "video/mp4",
+    kind: "video",
+    audioPreserved: true,
+    originalName: file.name,
+    inputSize: file.size,
+    outputSize: blob.size,
+    inputWidth: metadata.width,
+    inputHeight: metadata.height,
+    outputWidth: metadata.width,
+    outputHeight: metadata.height,
+  };
 }
 
 function addBatchItem(item) {
@@ -360,21 +363,89 @@ function isSupportedVideo(file) {
 }
 
 function supportsVideoExport() {
-  return Boolean(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream);
+  return Boolean(WebAssembly);
 }
 
-function getSupportedVideoMimeType() {
-  if (!MediaRecorder.isTypeSupported) return "";
+async function loadFfmpeg() {
+  if (ffmpegInstance) return ffmpegInstance;
 
-  const candidates = [
-    "video/mp4;codecs=avc1.42E01E",
-    "video/mp4",
-    "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8",
-    "video/webm",
-  ];
+  setStatus("正在加载本地视频转码引擎，首次约需下载 30MB...");
 
-  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+  const [{ FFmpeg }, helpers] = await Promise.all([
+    import("https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm"),
+    import("https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm"),
+  ]);
+
+  const ffmpeg = new FFmpeg();
+  ffmpegHelpers = helpers;
+  ffmpeg.on("log", ({ message }) => console.log(message));
+
+  const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+  await ffmpeg.load({
+    coreURL: await helpers.toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+    wasmURL: await helpers.toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+  });
+
+  ffmpegInstance = ffmpeg;
+  return ffmpegInstance;
+}
+
+async function readVideoMetadata(file) {
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.src = url;
+  video.preload = "metadata";
+  video.muted = true;
+  video.playsInline = true;
+
+  try {
+    await waitForVideoMetadata(video);
+    return {
+      width: video.videoWidth,
+      height: video.videoHeight,
+      duration: video.duration,
+    };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function createVideoPosterUrl(file) {
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.src = url;
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+
+  try {
+    await waitForVideoMetadata(video);
+    const size = fitSize(video.videoWidth, video.videoHeight, MAX_PREVIEW_EDGE);
+    sourceCanvas.width = size.width;
+    sourceCanvas.height = size.height;
+    resultCanvas.width = size.width;
+    resultCanvas.height = size.height;
+
+    await seekVideo(video, getVideoStartTime(video));
+    const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
+    drawVideoFrame(video, sourceContext, size);
+    return await createPreviewUrl(resultCanvas);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function getVideoInputExtension(fileName) {
+  const match = fileName.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match ? match[1] : "mov";
+}
+
+async function safeDeleteFfmpegFile(ffmpeg, fileName) {
+  try {
+    await ffmpeg.deleteFile(fileName);
+  } catch (error) {
+    console.warn("FFmpeg cleanup skipped:", fileName, error);
+  }
 }
 
 function waitForVideoMetadata(video) {
@@ -387,34 +458,6 @@ function waitForVideoMetadata(video) {
     video.addEventListener("loadedmetadata", resolve, { once: true });
     video.addEventListener("error", () => reject(new Error("视频读取失败，请换 MOV 或 MP4 再试。")), { once: true });
   });
-}
-
-async function renderVideoFrames(video, sourceContext, size, fileName, index, total) {
-  const startTime = performance.now();
-  let lastStatusTime = 0;
-
-  while (!isVideoNearEnd(video)) {
-    drawVideoFrame(video, sourceContext, size);
-
-    const now = performance.now();
-    if (now - lastStatusTime > 500) {
-      const progress = video.duration ? Math.min(98, Math.round((video.currentTime / video.duration) * 100)) : 0;
-      setStatus(`正在调色视频第 ${index + 1} / ${total} 个：${fileName}，${progress}%`);
-      lastStatusTime = now;
-    }
-
-    await waitForNextVideoFrame(video);
-
-    if (performance.now() - startTime > 120000) {
-      throw new Error("视频处理超时，请先裁短视频或选择较短 Live Photo 视频。");
-    }
-  }
-
-  if (video.readyState >= 2) {
-    drawVideoFrame(video, sourceContext, size);
-  }
-  video.pause();
-  setStatus(`正在调色视频第 ${index + 1} / ${total} 个：${fileName}，100%`);
 }
 
 function drawVideoFrame(video, sourceContext, size) {
@@ -447,75 +490,6 @@ function seekVideo(video, time) {
     }, { once: true });
     video.currentTime = target;
   });
-}
-
-function addOriginalAudioTracks(video, outputStream) {
-  const streamGetter = video.captureStream || video.mozCaptureStream;
-  if (!streamGetter) return 0;
-
-  try {
-    const sourceStream = streamGetter.call(video);
-    const tracks = sourceStream.getAudioTracks();
-    tracks.forEach((track) => {
-      outputStream.addTrack(track);
-    });
-    return tracks.length;
-  } catch (error) {
-    console.warn("Audio track capture failed:", error);
-    return 0;
-  }
-}
-
-async function playVideoForRecording(video) {
-  try {
-    video.muted = false;
-    video.volume = 1;
-    await video.play();
-    return true;
-  } catch (error) {
-    console.warn("Unmuted video playback failed, retrying muted:", error);
-    video.muted = true;
-    video.volume = 0;
-    await video.play();
-    return false;
-  }
-}
-
-function waitForNextVideoFrame(video) {
-  return new Promise((resolve) => {
-    let settled = false;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    };
-
-    const timeout = window.setTimeout(done, 220);
-    video.addEventListener("ended", done, { once: true });
-
-    if ("requestVideoFrameCallback" in video) {
-      video.requestVideoFrameCallback(() => {
-        window.clearTimeout(timeout);
-        done();
-      });
-    } else {
-      window.setTimeout(done, 1000 / VIDEO_FPS);
-    }
-  });
-}
-
-function isVideoNearEnd(video) {
-  if (video.ended) return true;
-  if (!Number.isFinite(video.duration) || video.duration <= 0) return false;
-  return video.currentTime >= Math.max(0, video.duration - 0.12);
-}
-
-async function stopRecorder(recorder, stopped) {
-  if (recorder.state !== "inactive") recorder.stop();
-  await Promise.race([
-    stopped,
-    wait(2500),
-  ]);
 }
 
 async function normalizeImageFile(file) {
