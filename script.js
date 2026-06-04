@@ -3,6 +3,7 @@ const sourceCanvas = document.querySelector("#sourceCanvas");
 const resultCanvas = document.querySelector("#resultCanvas");
 const sourcePreview = document.querySelector("#sourcePreview");
 const resultPreview = document.querySelector("#resultPreview");
+const videoPreview = document.querySelector("#videoPreview");
 const sourceCard = sourceCanvas.closest(".preview-card");
 const resultCard = resultCanvas.closest(".preview-card");
 const statusText = document.querySelector("#statusText");
@@ -15,6 +16,8 @@ const batchCount = document.querySelector("#batchCount");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
+const MAX_VIDEO_EDGE = 1080;
+const VIDEO_FPS = 24;
 const JPEG_QUALITY = 0.98;
 
 let sourcePreviewUrl = "";
@@ -26,7 +29,7 @@ input.addEventListener("change", async (event) => {
   if (!files.length) return;
 
   resetOutput();
-  setStatus(`已选择 ${files.length} 张照片，正在开始本地批量调色...`);
+  setStatus(`已选择 ${files.length} 个文件，正在开始本地批量调色...`);
 
   let successCount = 0;
 
@@ -35,7 +38,9 @@ input.addEventListener("change", async (event) => {
 
     try {
       setStatus(`正在处理第 ${index + 1} / ${files.length} 张：${file.name}`);
-      const item = await processFile(file, index, files.length);
+      const item = isSupportedVideo(file)
+        ? await processVideoFile(file, index, files.length)
+        : await processFile(file, index, files.length);
       addBatchItem(item);
       successCount += 1;
     } catch (error) {
@@ -64,7 +69,7 @@ saveButton.addEventListener("click", async () => {
 saveAllButton.addEventListener("click", async () => {
   if (!batchItems.length) return;
 
-  const files = batchItems.map((item) => new File([item.blob], item.name, { type: "image/jpeg" }));
+    const files = batchItems.map((item) => new File([item.blob], item.name, { type: item.type }));
 
   if (navigator.canShare && navigator.share && navigator.canShare({ files })) {
     try {
@@ -99,6 +104,8 @@ async function processFile(file, index, total) {
   setStatus(`正在调色第 ${index + 1} / ${total} 张：${file.name}`);
   applyCreamPreset(sourceCanvas, resultCanvas);
   resultCard.classList.add("has-image");
+  resultCard.classList.remove("has-video");
+  videoPreview.removeAttribute("src");
   await updatePreviewImage(resultCanvas, resultPreview, "result");
 
   const blob = await canvasToBlob(resultCanvas, "image/jpeg", JPEG_QUALITY);
@@ -114,6 +121,8 @@ async function processFile(file, index, total) {
     url,
     previewUrl,
     name: outputName,
+    type: "image/jpeg",
+    kind: "image",
     originalName: file.name,
     inputSize: file.size,
     outputSize: blob.size,
@@ -124,6 +133,92 @@ async function processFile(file, index, total) {
   };
 }
 
+async function processVideoFile(file, index, total) {
+  if (!supportsVideoExport()) {
+    throw new Error("当前浏览器不支持视频导出，请在较新的 Safari 或 Chrome 中打开。");
+  }
+
+  setStatus(`正在读取视频第 ${index + 1} / ${total} 个：${file.name}`);
+
+  const sourceUrl = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.src = sourceUrl;
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  video.crossOrigin = "anonymous";
+
+  try {
+    await waitForVideoMetadata(video);
+
+    const size = fitSize(video.videoWidth, video.videoHeight, MAX_VIDEO_EDGE);
+    sourceCanvas.width = size.width;
+    sourceCanvas.height = size.height;
+    resultCanvas.width = size.width;
+    resultCanvas.height = size.height;
+
+    const outputStream = resultCanvas.captureStream(VIDEO_FPS);
+    const mimeType = getSupportedVideoMimeType();
+    const recorderOptions = { videoBitsPerSecond: 8_000_000 };
+    if (mimeType) recorderOptions.mimeType = mimeType;
+    const recorder = new MediaRecorder(outputStream, recorderOptions);
+    const chunks = [];
+
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data && event.data.size) chunks.push(event.data);
+    });
+
+    const stopped = new Promise((resolve) => {
+      recorder.addEventListener("stop", resolve, { once: true });
+    });
+
+    const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
+
+    recorder.start(1000);
+    video.currentTime = 0;
+    await video.play();
+
+    await renderVideoFrames(video, sourceContext, size, file.name, index, total);
+
+    recorder.stop();
+    await stopped;
+
+    const outputType = recorder.mimeType || mimeType || "video/mp4";
+    const blob = new Blob(chunks, { type: outputType });
+    const url = URL.createObjectURL(blob);
+    const previewUrl = url;
+    const outputName = createVideoOutputName(file.name, outputType);
+
+    video.pause();
+    videoPreview.src = url;
+    videoPreview.muted = false;
+    resultCard.classList.add("has-video");
+    resultCard.classList.remove("has-image");
+    sourceCard.classList.remove("has-image");
+
+    downloadLink.href = url;
+    downloadLink.download = outputName;
+
+    return {
+      blob,
+      url,
+      previewUrl,
+      name: outputName,
+      type: outputType,
+      kind: "video",
+      originalName: file.name,
+      inputSize: file.size,
+      outputSize: blob.size,
+      inputWidth: video.videoWidth,
+      inputHeight: video.videoHeight,
+      outputWidth: size.width,
+      outputHeight: size.height,
+    };
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
 function addBatchItem(item) {
   batchItems.push(item);
   batchSection.classList.add("has-results");
@@ -132,10 +227,16 @@ function addBatchItem(item) {
   const article = document.createElement("article");
   article.className = "batch-item";
 
-  const image = document.createElement("img");
+  const image = document.createElement(item.kind === "video" ? "video" : "img");
   image.className = "batch-thumb";
-  image.alt = `${item.originalName} 调色预览`;
   image.src = item.previewUrl;
+  if (item.kind === "video") {
+    image.muted = true;
+    image.controls = true;
+    image.playsInline = true;
+  } else {
+    image.alt = `${item.originalName} 调色预览`;
+  }
 
   const meta = document.createElement("div");
   meta.className = "batch-meta";
@@ -146,7 +247,8 @@ function addBatchItem(item) {
 
   const info = document.createElement("div");
   info.className = "batch-info";
-  info.textContent = `${item.outputWidth}×${item.outputHeight} / ${formatBytes(item.outputSize)}`;
+  const typeText = item.kind === "video" ? "视频" : "图片";
+  info.textContent = `${typeText} ${item.outputWidth}×${item.outputHeight} / ${formatBytes(item.outputSize)}`;
 
   const link = document.createElement("a");
   link.className = "item-download";
@@ -186,7 +288,7 @@ function addBatchError(fileName, message) {
 }
 
 async function saveBatchItem(item) {
-  const file = new File([item.blob], item.name, { type: "image/jpeg" });
+  const file = new File([item.blob], item.name, { type: item.type });
 
   if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
     try {
@@ -214,6 +316,12 @@ function createOutputName(originalName) {
   return `${baseName}-cream-tone.jpg`;
 }
 
+function createVideoOutputName(originalName, mimeType) {
+  const baseName = originalName.replace(/\.[^.]+$/, "") || "video";
+  const extension = mimeType.includes("mp4") ? "mp4" : "webm";
+  return `${baseName}-cream-tone.${extension}`;
+}
+
 function wait(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -226,6 +334,81 @@ function isSupportedImage(file) {
   if (type === "image/heic" || type === "image/heif") return true;
   if (/\.(jpe?g|png|heic|heif)$/.test(name)) return true;
   return false;
+}
+
+function isSupportedVideo(file) {
+  const type = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+
+  if (type === "video/mp4" || type === "video/quicktime") return true;
+  if (/\.(mp4|mov|m4v)$/i.test(name)) return true;
+  return false;
+}
+
+function supportsVideoExport() {
+  return Boolean(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream);
+}
+
+function getSupportedVideoMimeType() {
+  if (!MediaRecorder.isTypeSupported) return "";
+
+  const candidates = [
+    "video/mp4;codecs=avc1.42E01E",
+    "video/mp4",
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+  ];
+
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+function waitForVideoMetadata(video) {
+  return new Promise((resolve, reject) => {
+    if (video.readyState >= 1 && video.videoWidth && video.videoHeight) {
+      resolve();
+      return;
+    }
+
+    video.addEventListener("loadedmetadata", resolve, { once: true });
+    video.addEventListener("error", () => reject(new Error("视频读取失败，请换 MOV 或 MP4 再试。")), { once: true });
+  });
+}
+
+async function renderVideoFrames(video, sourceContext, size, fileName, index, total) {
+  const startTime = performance.now();
+  let lastStatusTime = 0;
+
+  while (!video.ended) {
+    sourceContext.drawImage(video, 0, 0, size.width, size.height);
+    applyCreamPreset(sourceCanvas, resultCanvas);
+
+    const now = performance.now();
+    if (now - lastStatusTime > 500) {
+      const progress = video.duration ? Math.min(99, Math.round((video.currentTime / video.duration) * 100)) : 0;
+      setStatus(`正在调色视频第 ${index + 1} / ${total} 个：${fileName}，${progress}%`);
+      lastStatusTime = now;
+    }
+
+    await waitForNextVideoFrame(video);
+
+    if (performance.now() - startTime > 120000) {
+      throw new Error("视频处理超时，请先裁短视频或选择较短 Live Photo 视频。");
+    }
+  }
+
+  sourceContext.drawImage(video, 0, 0, size.width, size.height);
+  applyCreamPreset(sourceCanvas, resultCanvas);
+}
+
+function waitForNextVideoFrame(video) {
+  return new Promise((resolve) => {
+    if ("requestVideoFrameCallback" in video) {
+      video.requestVideoFrameCallback(() => resolve());
+    } else {
+      window.setTimeout(resolve, 1000 / VIDEO_FPS);
+    }
+  });
 }
 
 async function normalizeImageFile(file) {
@@ -557,7 +740,7 @@ function resetOutput() {
 
   batchItems.forEach((item) => {
     URL.revokeObjectURL(item.url);
-    URL.revokeObjectURL(item.previewUrl);
+    if (item.previewUrl !== item.url) URL.revokeObjectURL(item.previewUrl);
   });
   batchItems = [];
 

@@ -22,10 +22,10 @@
         <label class="upload-box" for="photoInput">
           <span class="upload-icon" aria-hidden="true">+</span>
           <span class="upload-title">选择产品图</span>
-          <span class="upload-subtitle">支持 JPG / JPEG / PNG / HEIC / HEIF</span>
-          <span class="upload-note">HEIC/HEIF 会先在浏览器本地转码，再继续调色</span>
+          <span class="upload-subtitle">支持 JPG / PNG / HEIC / HEIF / MOV / MP4</span>
+          <span class="upload-note">Live Photo 如能导入为视频，会本地逐帧调色后导出视频</span>
         </label>
-        <input id="photoInput" type="file" accept="image/jpeg,image/jpg,image/png,image/heic,image/heif" multiple hidden>
+        <input id="photoInput" type="file" accept="image/jpeg,image/jpg,image/png,image/heic,image/heif,video/mp4,video/quicktime,video/mov" multiple hidden>
       </section>
 
       <section id="statusPanel" class="status-panel" aria-live="polite">
@@ -48,6 +48,7 @@
           </div>
           <img id="resultPreview" class="preview-image" alt="调色后预览">
           <canvas id="resultCanvas" class="preview-canvas" aria-label="调色后预览"></canvas>
+          <video id="videoPreview" class="preview-video" controls playsinline muted></video>
           <div id="resultEmpty" class="empty-state">自动生成预览</div>
         </article>
       </section>
@@ -61,8 +62,8 @@
       </section>
 
       <div class="actions">
-        <button id="saveButton" class="save-button" type="button" disabled>保存高质量图片</button>
-        <button id="saveAllButton" class="save-button secondary-button" type="button" disabled>保存全部图片</button>
+        <button id="saveButton" class="save-button" type="button" disabled>保存当前结果</button>
+        <button id="saveAllButton" class="save-button secondary-button" type="button" disabled>保存全部结果</button>
         <a id="downloadLink" class="download-link" download="cream-tone-photo.jpg" hidden>下载图片</a>
       </div>
 
