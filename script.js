@@ -13,17 +13,41 @@ const downloadLink = document.querySelector("#downloadLink");
 const batchSection = document.querySelector("#batchSection");
 const batchResults = document.querySelector("#batchResults");
 const batchCount = document.querySelector("#batchCount");
+const strengthSlider = document.querySelector("#strengthSlider");
+const strengthValue = document.querySelector("#strengthValue");
+const compareButton = document.querySelector("#compareButton");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v2.3";
+const APP_VERSION = "v2.5";
+const COMPAT_VIDEO_EDGE = 720;
+const COMPAT_VIDEO_FPS = 24;
+const COMPAT_VIDEO_BITRATE = 6_000_000;
 const JPEG_QUALITY = 0.98;
 
 let sourcePreviewUrl = "";
 let resultPreviewUrl = "";
 let batchItems = [];
+let selectedItem = null;
+let presetStrength = 1;
 let ffmpegInstance = null;
 let ffmpegHelpers = null;
+
+strengthSlider.addEventListener("input", () => {
+  presetStrength = Number(strengthSlider.value) / 100;
+  strengthValue.textContent = `${strengthSlider.value}%`;
+});
+
+compareButton.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  showOriginalCompare();
+});
+
+compareButton.addEventListener("pointerup", restoreEditedCompare);
+compareButton.addEventListener("pointercancel", restoreEditedCompare);
+compareButton.addEventListener("pointerleave", restoreEditedCompare);
+compareButton.addEventListener("blur", restoreEditedCompare);
+document.addEventListener("pointerup", restoreEditedCompare);
 
 input.addEventListener("change", async (event) => {
   const files = Array.from(event.target.files || []);
@@ -63,8 +87,8 @@ input.addEventListener("change", async (event) => {
 });
 
 saveButton.addEventListener("click", async () => {
-  const latestItem = batchItems[batchItems.length - 1];
-  if (latestItem) await saveBatchItem(latestItem);
+  const item = selectedItem || batchItems[batchItems.length - 1];
+  if (item) await saveBatchItem(item);
 });
 
 saveAllButton.addEventListener("click", async () => {
@@ -101,9 +125,10 @@ async function processFile(file, index, total) {
 
   drawSource(bitmap, size.width, size.height);
   await updatePreviewImage(sourceCanvas, sourcePreview, "source");
+  const sourcePreviewUrlForItem = await createPreviewUrl(sourceCanvas);
 
   setStatus(`正在调色第 ${index + 1} / ${total} 张：${file.name}`);
-  applyCreamPreset(sourceCanvas, resultCanvas);
+  applyCreamPreset(sourceCanvas, resultCanvas, presetStrength);
   resultCard.classList.add("has-image");
   resultCard.classList.remove("has-video");
   videoPreview.removeAttribute("src");
@@ -121,6 +146,7 @@ async function processFile(file, index, total) {
     blob,
     url,
     previewUrl,
+    sourcePreviewUrl: sourcePreviewUrlForItem,
     name: outputName,
     type: "image/jpeg",
     kind: "image",
@@ -135,6 +161,10 @@ async function processFile(file, index, total) {
 }
 
 async function processVideoFile(file, index, total) {
+  if (isIOSBrowser()) {
+    return await processVideoFileCompat(file, index, total);
+  }
+
   setStatus(`正在加载高质量视频引擎，首次使用会稍慢...`);
 
   const [metadata, posterUrl, ffmpeg] = await Promise.all([
@@ -155,11 +185,7 @@ async function processVideoFile(file, index, total) {
 
   await ffmpeg.writeFile(inputName, await helpers.fetchFile(file));
 
-  const filter = [
-    "eq=brightness=0.035:contrast=0.96:saturation=0.94:gamma=0.98",
-    "colorbalance=rs=0.025:gs=-0.004:bs=-0.018:rm=0.012:gm=-0.002:bm=-0.01",
-    "curves=all='0/0 0.25/0.28 0.65/0.68 0.9/0.88 1/0.97'",
-  ].join(",");
+  const filter = createVideoFilter(presetStrength);
 
   const command = [
     "-i", inputName,
@@ -234,6 +260,187 @@ async function processVideoFile(file, index, total) {
   };
 }
 
+async function processVideoFileCompat(file, index, total) {
+  if (!supportsCompatVideoExport()) {
+    throw new Error("当前浏览器不支持 iPhone 兼容视频调色。请升级 Safari，或在电脑浏览器中使用高质量模式。");
+  }
+
+  setStatus(`正在使用 iPhone 兼容模式调色视频第 ${index + 1} / ${total} 个：${file.name}`);
+
+  const sourceUrl = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.src = sourceUrl;
+  video.muted = true;
+  video.volume = 0;
+  video.playsInline = true;
+  video.preload = "auto";
+
+  try {
+    await waitForVideoMetadata(video);
+
+    const size = fitSize(video.videoWidth, video.videoHeight, COMPAT_VIDEO_EDGE);
+    sourceCanvas.width = size.width;
+    sourceCanvas.height = size.height;
+    resultCanvas.width = size.width;
+    resultCanvas.height = size.height;
+
+    const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
+    await seekVideo(video, getVideoStartTime(video));
+    drawVideoFrame(video, sourceContext, size);
+    const posterUrl = await createPreviewUrl(resultCanvas);
+
+    const stream = resultCanvas.captureStream(COMPAT_VIDEO_FPS);
+    const mimeType = getCompatVideoMimeType();
+    const recorderOptions = { videoBitsPerSecond: COMPAT_VIDEO_BITRATE };
+    if (mimeType) recorderOptions.mimeType = mimeType;
+
+    const recorder = new MediaRecorder(stream, recorderOptions);
+    const chunks = [];
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data && event.data.size) chunks.push(event.data);
+    });
+
+    const stopped = new Promise((resolve) => {
+      recorder.addEventListener("stop", resolve, { once: true });
+    });
+
+    recorder.start(500);
+    drawVideoFrame(video, sourceContext, size);
+    await wait(100);
+    await seekVideo(video, getVideoStartTime(video));
+    await video.play();
+    await renderCompatVideoFrames(video, sourceContext, size, file.name, index, total);
+    stopStreamTracks(stream);
+    if (recorder.state !== "inactive") recorder.stop();
+    await Promise.race([stopped, wait(2500)]);
+
+    const outputType = recorder.mimeType || mimeType || "video/mp4";
+    const blob = new Blob(chunks, { type: outputType });
+    const url = URL.createObjectURL(blob);
+    const outputName = createVideoOutputName(file.name, outputType);
+
+    videoPreview.src = url;
+    videoPreview.poster = posterUrl;
+    videoPreview.muted = false;
+    videoPreview.preload = "metadata";
+    resultCard.classList.add("has-video");
+    resultCard.classList.remove("has-image");
+    sourceCard.classList.remove("has-image");
+
+    downloadLink.href = url;
+    downloadLink.download = outputName;
+
+    return {
+      blob,
+      url,
+      previewUrl: url,
+      posterUrl,
+      name: outputName,
+      type: outputType,
+      kind: "video",
+      audioPreserved: false,
+      mode: "compat",
+      originalName: file.name,
+      inputSize: file.size,
+      outputSize: blob.size,
+      inputWidth: video.videoWidth,
+      inputHeight: video.videoHeight,
+      outputWidth: size.width,
+      outputHeight: size.height,
+    };
+  } finally {
+    video.pause();
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
+function supportsCompatVideoExport() {
+  return Boolean(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream);
+}
+
+function getCompatVideoMimeType() {
+  if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
+
+  const candidates = [
+    "video/mp4;codecs=avc1.42E01E",
+    "video/mp4",
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+  ];
+
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+async function renderCompatVideoFrames(video, sourceContext, size, fileName, index, total) {
+  const startedAt = performance.now();
+  let lastUpdate = 0;
+
+  while (!isCompatVideoNearEnd(video)) {
+    drawVideoFrame(video, sourceContext, size);
+
+    const now = performance.now();
+    if (now - lastUpdate > 450) {
+      const percent = Number.isFinite(video.duration) && video.duration > 0
+        ? Math.min(99, Math.round((video.currentTime / video.duration) * 100))
+        : 0;
+      setStatus(`正在兼容模式调色视频第 ${index + 1} / ${total} 个：${fileName}，${percent}%`);
+      lastUpdate = now;
+    }
+
+    if (now - startedAt > 180000) {
+      throw new Error("视频处理超过 3 分钟仍未完成，请先裁短视频或换一个更小的视频再试。");
+    }
+
+    await waitForCompatVideoFrame(video);
+  }
+
+  if (video.readyState >= 2) {
+    drawVideoFrame(video, sourceContext, size);
+  }
+
+  video.pause();
+  setStatus(`正在生成兼容调色视频：${fileName}，100%`);
+}
+
+function waitForCompatVideoFrame(video) {
+  if (video.ended || isCompatVideoNearEnd(video)) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+
+    const timeout = window.setTimeout(done, 320);
+    video.addEventListener("ended", () => {
+      window.clearTimeout(timeout);
+      done();
+    }, { once: true });
+
+    if ("requestVideoFrameCallback" in video) {
+      video.requestVideoFrameCallback(() => {
+        window.clearTimeout(timeout);
+        done();
+      });
+    }
+  });
+}
+
+function isCompatVideoNearEnd(video) {
+  if (video.ended) return true;
+  if (!Number.isFinite(video.duration) || video.duration <= 0) return false;
+  return video.currentTime >= video.duration - 0.08;
+}
+
+function stopStreamTracks(stream) {
+  if (!stream) return;
+  stream.getTracks().forEach((track) => track.stop());
+}
+
 function addBatchItem(item) {
   batchItems.push(item);
   batchSection.classList.add("has-results");
@@ -275,7 +482,64 @@ function addBatchItem(item) {
 
   meta.append(name, info, link);
   article.append(image, meta);
+  article.addEventListener("click", (event) => {
+    if (event.target.closest("a, button, video")) return;
+    selectBatchItem(item, article);
+  });
   batchResults.append(article);
+  selectBatchItem(item, article);
+}
+
+function selectBatchItem(item, article) {
+  selectedItem = item;
+  batchResults.querySelectorAll(".batch-item").forEach((element) => {
+    element.classList.toggle("is-selected", element === article);
+  });
+
+  downloadLink.href = item.url;
+  downloadLink.download = item.name;
+  saveButton.disabled = false;
+
+  if (item.kind === "video") {
+    sourceCard.classList.remove("has-image");
+    resultCard.classList.remove("has-image");
+    resultCard.classList.add("has-video");
+    sourcePreview.removeAttribute("src");
+    resultPreview.removeAttribute("src");
+    videoPreview.src = item.previewUrl || item.url;
+    if (item.posterUrl) {
+      videoPreview.poster = item.posterUrl;
+    } else {
+      videoPreview.removeAttribute("poster");
+    }
+    videoPreview.muted = false;
+    videoPreview.preload = "metadata";
+    compareButton.disabled = true;
+    compareButton.textContent = "按住看原图";
+    return;
+  }
+
+  sourceCard.classList.add("has-image");
+  resultCard.classList.add("has-image");
+  resultCard.classList.remove("has-video");
+  videoPreview.removeAttribute("src");
+  videoPreview.removeAttribute("poster");
+  sourcePreview.src = item.sourcePreviewUrl || "";
+  resultPreview.src = item.previewUrl;
+  compareButton.disabled = !item.sourcePreviewUrl;
+  compareButton.textContent = "按住看原图";
+}
+
+function showOriginalCompare() {
+  if (!selectedItem || selectedItem.kind !== "image" || !selectedItem.sourcePreviewUrl) return;
+  resultPreview.src = selectedItem.sourcePreviewUrl;
+  compareButton.textContent = "松开看调色后";
+}
+
+function restoreEditedCompare() {
+  if (!selectedItem || selectedItem.kind !== "image") return;
+  resultPreview.src = selectedItem.previewUrl;
+  compareButton.textContent = "按住看原图";
 }
 
 function addBatchError(fileName, message) {
@@ -364,6 +628,13 @@ function isSupportedVideo(file) {
 
 function supportsVideoExport() {
   return Boolean(WebAssembly);
+}
+
+function isIOSBrowser() {
+  const ua = navigator.userAgent || "";
+  const iOSDevice = /iPad|iPhone|iPod/.test(ua);
+  const iPadOSDesktopMode = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return iOSDevice || iPadOSDesktopMode;
 }
 
 async function loadFfmpeg() {
@@ -531,6 +802,32 @@ function getVideoInputExtension(fileName) {
   return match ? match[1] : "mov";
 }
 
+function createVideoFilter(strength) {
+  const amount = clamp01(strength);
+  if (amount <= 0.001) return "null";
+
+  const brightness = (0.035 * amount).toFixed(4);
+  const contrast = (1 + (0.96 - 1) * amount).toFixed(4);
+  const saturation = (1 + (0.94 - 1) * amount).toFixed(4);
+  const gamma = (1 + (0.98 - 1) * amount).toFixed(4);
+  const rs = (0.025 * amount).toFixed(4);
+  const gs = (-0.004 * amount).toFixed(4);
+  const bs = (-0.018 * amount).toFixed(4);
+  const rm = (0.012 * amount).toFixed(4);
+  const gm = (-0.002 * amount).toFixed(4);
+  const bm = (-0.01 * amount).toFixed(4);
+  const mid1 = (0.25 + 0.03 * amount).toFixed(4);
+  const mid2 = (0.65 + 0.03 * amount).toFixed(4);
+  const high = (0.9 - 0.02 * amount).toFixed(4);
+  const white = (1 - 0.03 * amount).toFixed(4);
+
+  return [
+    `eq=brightness=${brightness}:contrast=${contrast}:saturation=${saturation}:gamma=${gamma}`,
+    `colorbalance=rs=${rs}:gs=${gs}:bs=${bs}:rm=${rm}:gm=${gm}:bm=${bm}`,
+    `curves=all='0/0 0.25/${mid1} 0.65/${mid2} 0.9/${high} 1/${white}'`,
+  ].join(",");
+}
+
 async function safeDeleteFfmpegFile(ffmpeg, fileName) {
   try {
     await ffmpeg.deleteFile(fileName);
@@ -553,7 +850,7 @@ function waitForVideoMetadata(video) {
 
 function drawVideoFrame(video, sourceContext, size) {
   sourceContext.drawImage(video, 0, 0, size.width, size.height);
-  applyCreamPreset(sourceCanvas, resultCanvas);
+  applyCreamPreset(sourceCanvas, resultCanvas, presetStrength);
 }
 
 function getVideoStartTime(video) {
@@ -688,11 +985,12 @@ function drawSource(image, width, height) {
   sourceCard.classList.add("has-image");
 }
 
-function applyCreamPreset(source, target) {
+function applyCreamPreset(source, target, strengthAmount = 1) {
   const sourceContext = source.getContext("2d", { willReadFrequently: true });
   const targetContext = target.getContext("2d", { willReadFrequently: true });
   const imageData = sourceContext.getImageData(0, 0, source.width, source.height);
   const data = imageData.data;
+  const presetAmount = clamp01(strengthAmount);
 
   const exposureFactor = 1.055;
   const blackLift = 0.018;
@@ -753,12 +1051,12 @@ function applyCreamPreset(source, target) {
 
     [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
 
-    const strength = mix(0.82, 0.52, neutralProtection);
+    const strength = mix(0.82, 0.52, neutralProtection) * presetAmount;
     r = mix(originalR, r, strength);
     g = mix(originalG, g, strength);
     b = mix(originalB, b, strength);
 
-    const dither = deterministicDither(x, y) / 255;
+    const dither = (deterministicDither(x, y) / 255) * presetAmount;
     data[i] = toByte(r + dither);
     data[i + 1] = toByte(g + dither);
     data[i + 2] = toByte(b + dither);
@@ -902,6 +1200,9 @@ function canvasToBlob(canvas, type, quality) {
 function resetOutput() {
   saveButton.disabled = true;
   saveAllButton.disabled = true;
+  selectedItem = null;
+  compareButton.disabled = true;
+  compareButton.textContent = "按住看原图";
   sourceCard.classList.remove("has-image");
   resultCard.classList.remove("has-image");
   resultCard.classList.remove("has-video");
@@ -916,6 +1217,9 @@ function resetOutput() {
   batchItems.forEach((item) => {
     URL.revokeObjectURL(item.url);
     if (item.previewUrl !== item.url) URL.revokeObjectURL(item.previewUrl);
+    if (item.sourcePreviewUrl && item.sourcePreviewUrl !== item.previewUrl && item.sourcePreviewUrl !== item.url) {
+      URL.revokeObjectURL(item.sourcePreviewUrl);
+    }
     if (item.posterUrl && item.posterUrl !== item.url && item.posterUrl !== item.previewUrl) {
       URL.revokeObjectURL(item.posterUrl);
     }

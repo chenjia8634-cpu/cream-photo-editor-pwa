@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="奶油调色">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>奶油感产品图自动调色工具 v2.3</title>
+    <title>奶油感产品图自动调色工具 v2.5</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
   </head>
@@ -15,7 +15,7 @@
     <main class="app-shell">
       <header class="app-header">
         <p class="eyebrow">本地浏览器处理 · 不上传照片</p>
-        <h1>奶油感产品图自动调色工具 <span class="version-badge">v2.3</span></h1>
+        <h1>奶油感产品图自动调色工具 <span class="version-badge">v2.5</span></h1>
       </header>
 
       <section class="panel upload-panel" aria-label="上传照片">
@@ -23,9 +23,18 @@
           <span class="upload-icon" aria-hidden="true">+</span>
           <span class="upload-title">选择产品图</span>
           <span class="upload-subtitle">支持 JPG / PNG / HEIC / HEIF / MOV / MP4</span>
-          <span class="upload-note">Live Photo 如能导入为视频，会本地逐帧调色后导出视频</span>
+          <span class="upload-note">图片可批量调色；iPhone 视频使用兼容模式导出调色视频</span>
         </label>
         <input id="photoInput" type="file" accept="image/jpeg,image/jpg,image/png,image/heic,image/heif,video/mp4,video/quicktime,video/mov" multiple hidden>
+      </section>
+
+      <section class="panel control-panel" aria-label="调色强度">
+        <div class="control-row">
+          <label for="strengthSlider">调色强度</label>
+          <output id="strengthValue" for="strengthSlider">100%</output>
+        </div>
+        <input id="strengthSlider" class="strength-slider" type="range" min="0" max="100" step="5" value="100">
+        <p class="control-hint">上传前调整强度；批量处理会按当前强度生成。</p>
       </section>
 
       <section id="statusPanel" class="status-panel" aria-live="polite">
@@ -45,6 +54,7 @@
         <article class="preview-card">
           <div class="preview-head">
             <h2>调色后</h2>
+            <button id="compareButton" class="compare-button" type="button" disabled>按住看原图</button>
           </div>
           <img id="resultPreview" class="preview-image" alt="调色后预览">
           <canvas id="resultCanvas" class="preview-canvas" aria-label="调色后预览"></canvas>
@@ -69,7 +79,7 @@
 
       <section class="panel privacy-panel">
         <h2>处理说明</h2>
-        <p>照片只在当前浏览器里读取和调色，不会上传到任何服务器。输出为高质量 JPG，质量约 0.98。</p>
+        <p>照片和视频只在当前浏览器里读取和调色，不会上传到任何服务器。图片输出为高质量 JPG；iPhone 视频兼容模式会导出调色视频，但通常无法保留原声音。</p>
       </section>
     </main>
 
