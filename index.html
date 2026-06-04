@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="奶油调色">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>奶油感产品图自动调色工具 v2.5</title>
+    <title>奶油感产品图自动调色工具 v2.6</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
   </head>
@@ -15,7 +15,7 @@
     <main class="app-shell">
       <header class="app-header">
         <p class="eyebrow">本地浏览器处理 · 不上传照片</p>
-        <h1>奶油感产品图自动调色工具 <span class="version-badge">v2.5</span></h1>
+        <h1>奶油感产品图自动调色工具 <span class="version-badge">v2.6</span></h1>
       </header>
 
       <section class="panel upload-panel" aria-label="上传照片">
@@ -41,14 +41,10 @@
         <span id="statusText">请选择一张照片开始调色。</span>
       </section>
 
-      <section class="preview-grid" aria-label="图片预览">
-        <article class="preview-card">
-          <div class="preview-head">
-            <h2>原图</h2>
-          </div>
-          <img id="sourcePreview" class="preview-image" alt="原图预览">
-          <canvas id="sourceCanvas" class="preview-canvas" aria-label="原图预览"></canvas>
-          <div id="sourceEmpty" class="empty-state">等待上传</div>
+      <section class="preview-grid" aria-label="调色预览">
+        <article class="preview-card processing-card" aria-hidden="true">
+          <img id="sourcePreview" class="preview-image" alt="">
+          <canvas id="sourceCanvas" class="preview-canvas" aria-label="原图处理画布"></canvas>
         </article>
 
         <article class="preview-card">

@@ -194,6 +194,10 @@ h2 {
   background: var(--panel);
 }
 
+.processing-card {
+  display: none;
+}
+
 .preview-head {
   display: flex;
   align-items: center;
