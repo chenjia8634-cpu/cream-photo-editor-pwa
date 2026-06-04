@@ -1,0 +1,249 @@
+:root {
+  color-scheme: light;
+  --bg: #f8f1e7;
+  --panel: #fffaf2;
+  --panel-strong: #fff6e7;
+  --text: #322b24;
+  --muted: #7d7064;
+  --line: #e9dccb;
+  --button: #c9a77d;
+  --button-dark: #9d7953;
+  --button-text: #fffdf9;
+  --shadow: 0 10px 30px rgba(88, 65, 40, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--bg);
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  color: var(--text);
+  background:
+    linear-gradient(180deg, #fbf5eb 0%, #f8f1e7 46%, #f3eadf 100%);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+button,
+input,
+a {
+  font: inherit;
+}
+
+.app-shell {
+  width: min(100%, 760px);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: max(20px, env(safe-area-inset-top)) 16px max(28px, env(safe-area-inset-bottom));
+}
+
+.app-header {
+  padding: 8px 2px 18px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: clamp(28px, 9vw, 40px);
+  line-height: 1.08;
+  font-weight: 760;
+}
+
+h2 {
+  margin-bottom: 0;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.panel,
+.preview-card,
+.status-panel {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 250, 242, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.upload-panel {
+  padding: 10px;
+}
+
+.upload-box {
+  display: grid;
+  place-items: center;
+  min-height: 178px;
+  padding: 24px 16px;
+  border: 1.5px dashed #d7b88f;
+  border-radius: 14px;
+  background: var(--panel-strong);
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.upload-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  color: var(--button-text);
+  background: var(--button);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.upload-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.upload-subtitle,
+.upload-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.upload-note {
+  max-width: 290px;
+  margin-top: 6px;
+}
+
+.status-panel {
+  margin-top: 12px;
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.preview-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 220px;
+  background: var(--panel);
+}
+
+.preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.preview-canvas {
+  display: none;
+  width: 100%;
+  height: auto;
+  max-height: 62vh;
+  object-fit: contain;
+  background: #fff;
+}
+
+.preview-card.has-image .preview-canvas {
+  display: block;
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 170px;
+  padding: 24px;
+  color: #aa9a8a;
+  font-size: 14px;
+}
+
+.preview-card.has-image .empty-state {
+  display: none;
+}
+
+.actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  padding: 14px 0 calc(4px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(248, 241, 231, 0), var(--bg) 28%, var(--bg) 100%);
+}
+
+.save-button,
+.download-link {
+  display: grid;
+  place-items: center;
+  min-height: 52px;
+  width: 100%;
+  border: 0;
+  border-radius: 16px;
+  color: var(--button-text);
+  background: linear-gradient(180deg, #d5b68d 0%, var(--button) 100%);
+  box-shadow: 0 12px 24px rgba(157, 121, 83, 0.22);
+  font-weight: 750;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.save-button:disabled {
+  color: #b7aa9d;
+  background: #eee4d8;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.privacy-panel {
+  padding: 14px;
+}
+
+.privacy-panel h2 {
+  margin-bottom: 6px;
+}
+
+.privacy-panel p {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+@media (min-width: 700px) {
+  .app-shell {
+    padding-inline: 24px;
+  }
+
+  .preview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .preview-canvas {
+    max-height: 480px;
+  }
+}
