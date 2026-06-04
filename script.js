@@ -16,7 +16,7 @@ const batchCount = document.querySelector("#batchCount");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v2.1";
+const APP_VERSION = "v2.2";
 const JPEG_QUALITY = 0.98;
 
 let sourcePreviewUrl = "";
@@ -369,20 +369,25 @@ function supportsVideoExport() {
 async function loadFfmpeg() {
   if (ffmpegInstance) return ffmpegInstance;
 
-  setStatus("正在加载本地视频转码引擎，首次约需下载 30MB...");
+  setStatus("正在加载视频引擎模块 1 / 3...");
+  const { FFmpeg } = await importWithStatus(
+    "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm",
+    "视频引擎模块 1 / 3"
+  );
 
-  const [{ FFmpeg }, helpers] = await Promise.all([
-    import("https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm"),
-    import("https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm"),
-  ]);
+  setStatus("正在加载视频工具模块 2 / 3...");
+  const helpers = await importWithStatus(
+    "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm",
+    "视频工具模块 2 / 3"
+  );
 
   const ffmpeg = new FFmpeg();
   ffmpegHelpers = helpers;
   ffmpeg.on("log", ({ message }) => console.log(message));
 
   const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
-  const coreURL = await downloadToBlobUrl(`${baseURL}/ffmpeg-core.js`, "text/javascript", "视频引擎 JS", 0, 15);
-  const wasmURL = await downloadToBlobUrl(`${baseURL}/ffmpeg-core.wasm`, "application/wasm", "视频引擎 WASM", 15, 100);
+  const coreURL = await downloadToBlobUrl(`${baseURL}/ffmpeg-core.js`, "text/javascript", "视频引擎 JS 3 / 3", 0, 15);
+  const wasmURL = await downloadToBlobUrl(`${baseURL}/ffmpeg-core.wasm`, "application/wasm", "视频引擎 WASM 3 / 3", 15, 100);
 
   setStatus("视频引擎下载完成，正在初始化...");
   await ffmpeg.load({
@@ -392,6 +397,23 @@ async function loadFfmpeg() {
 
   ffmpegInstance = ffmpeg;
   return ffmpegInstance;
+}
+
+async function importWithStatus(url, label) {
+  const reminder = window.setTimeout(() => {
+    setStatus(`${label} 仍在加载中，请保持网页打开...`);
+  }, 8000);
+
+  try {
+    return await Promise.race([
+      import(url),
+      wait(45000).then(() => {
+        throw new Error(`${label} 加载超时，请检查网络后刷新重试。`);
+      }),
+    ]);
+  } finally {
+    window.clearTimeout(reminder);
+  }
 }
 
 async function downloadToBlobUrl(url, mimeType, label, startPercent, endPercent) {
