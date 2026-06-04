@@ -16,7 +16,7 @@ const batchCount = document.querySelector("#batchCount");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v2.2";
+const APP_VERSION = "v2.3";
 const JPEG_QUALITY = 0.98;
 
 let sourcePreviewUrl = "";
@@ -389,14 +389,35 @@ async function loadFfmpeg() {
   const coreURL = await downloadToBlobUrl(`${baseURL}/ffmpeg-core.js`, "text/javascript", "视频引擎 JS 3 / 3", 0, 15);
   const wasmURL = await downloadToBlobUrl(`${baseURL}/ffmpeg-core.wasm`, "application/wasm", "视频引擎 WASM 3 / 3", 15, 100);
 
-  setStatus("视频引擎下载完成，正在初始化...");
-  await ffmpeg.load({
+  await initializeFfmpegWithStatus(ffmpeg, {
     coreURL,
     wasmURL,
   });
 
   ffmpegInstance = ffmpeg;
   return ffmpegInstance;
+}
+
+async function initializeFfmpegWithStatus(ffmpeg, config) {
+  const startedAt = Date.now();
+  setStatus("视频引擎下载完成，正在初始化，可能需要 10-30 秒...");
+
+  const heartbeat = window.setInterval(() => {
+    const seconds = Math.round((Date.now() - startedAt) / 1000);
+    setStatus(`视频引擎正在初始化，已等待 ${seconds} 秒，请保持网页打开...`);
+  }, 5000);
+
+  try {
+    await Promise.race([
+      ffmpeg.load(config),
+      wait(60000).then(() => {
+        throw new Error("视频引擎初始化超时。iPhone Safari 可能内存不足或阻止了 WASM 初始化，请刷新后重试，或先处理更短的视频。");
+      }),
+    ]);
+    setStatus("视频引擎初始化完成，正在准备调色...");
+  } finally {
+    window.clearInterval(heartbeat);
+  }
 }
 
 async function importWithStatus(url, label) {
