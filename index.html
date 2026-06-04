@@ -22,8 +22,8 @@
         <label class="upload-box" for="photoInput">
           <span class="upload-icon" aria-hidden="true">+</span>
           <span class="upload-title">选择产品图</span>
-          <span class="upload-subtitle">支持 JPG / JPEG / PNG</span>
-          <span class="upload-note">HEIC 请先在 iPhone 相册中复制或导出为 JPEG 后上传</span>
+          <span class="upload-subtitle">支持 JPG / JPEG / PNG / HEIC / HEIF</span>
+          <span class="upload-note">HEIC/HEIF 会先在浏览器本地转码，再继续调色</span>
         </label>
         <input id="photoInput" type="file" accept="image/jpeg,image/jpg,image/png,image/heic,image/heif" hidden>
       </section>
@@ -37,6 +37,7 @@
           <div class="preview-head">
             <h2>原图</h2>
           </div>
+          <img id="sourcePreview" class="preview-image" alt="原图预览">
           <canvas id="sourceCanvas" class="preview-canvas" aria-label="原图预览"></canvas>
           <div id="sourceEmpty" class="empty-state">等待上传</div>
         </article>
@@ -45,6 +46,7 @@
           <div class="preview-head">
             <h2>调色后</h2>
           </div>
+          <img id="resultPreview" class="preview-image" alt="调色后预览">
           <canvas id="resultCanvas" class="preview-canvas" aria-label="调色后预览"></canvas>
           <div id="resultEmpty" class="empty-state">自动生成预览</div>
         </article>
@@ -61,6 +63,7 @@
       </section>
     </main>
 
-    <script src="script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" defer></script>
+    <script src="script.js" defer></script>
   </body>
 </html>

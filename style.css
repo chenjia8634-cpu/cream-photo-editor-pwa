@@ -160,7 +160,7 @@ h2 {
   border-bottom: 1px solid var(--line);
 }
 
-.preview-canvas {
+.preview-image {
   display: none;
   width: 100%;
   height: auto;
@@ -169,8 +169,12 @@ h2 {
   background: #fff;
 }
 
-.preview-card.has-image .preview-canvas {
+.preview-card.has-image .preview-image {
   display: block;
+}
+
+.preview-canvas {
+  display: none;
 }
 
 .empty-state {
@@ -243,7 +247,7 @@ h2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .preview-canvas {
+  .preview-image {
     max-height: 480px;
   }
 }

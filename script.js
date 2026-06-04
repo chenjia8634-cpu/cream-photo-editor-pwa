@@ -1,6 +1,8 @@
 const input = document.querySelector("#photoInput");
 const sourceCanvas = document.querySelector("#sourceCanvas");
 const resultCanvas = document.querySelector("#resultCanvas");
+const sourcePreview = document.querySelector("#sourcePreview");
+const resultPreview = document.querySelector("#resultPreview");
 const sourceCard = sourceCanvas.closest(".preview-card");
 const resultCard = resultCanvas.closest(".preview-card");
 const statusText = document.querySelector("#statusText");
@@ -8,10 +10,13 @@ const saveButton = document.querySelector("#saveButton");
 const downloadLink = document.querySelector("#downloadLink");
 
 const MAX_EXPORT_EDGE = 6000;
+const MAX_PREVIEW_EDGE = 1400;
 const JPEG_QUALITY = 0.98;
 
 let latestBlobUrl = "";
 let latestFileName = "cream-tone-photo.jpg";
+let sourcePreviewUrl = "";
+let resultPreviewUrl = "";
 
 input.addEventListener("change", async (event) => {
   const file = event.target.files && event.target.files[0];
@@ -22,17 +27,20 @@ input.addEventListener("change", async (event) => {
 
   try {
     if (!isSupportedImage(file)) {
-      throw new Error("请选择 JPG、JPEG 或 PNG。HEIC 请先在 iPhone 相册中复制或导出为 JPEG。");
+      throw new Error("请选择 JPG、JPEG、PNG、HEIC 或 HEIF 图片。");
     }
 
-    const bitmap = await decodeImage(file);
+    const imageFile = await normalizeImageFile(file);
+    const bitmap = await decodeImage(imageFile);
     const size = fitSize(bitmap.width, bitmap.height, MAX_EXPORT_EDGE);
 
     drawSource(bitmap, size.width, size.height);
+    await updatePreviewImage(sourceCanvas, sourcePreview, "source");
     setStatus("正在本地调色...");
 
     applyCreamPreset(sourceCanvas, resultCanvas);
     resultCard.classList.add("has-image");
+    await updatePreviewImage(resultCanvas, resultPreview, "result");
 
     const outputSize = await prepareDownload(file.name);
     const inputText = `${bitmap.width}×${bitmap.height} / ${formatBytes(file.size)}`;
@@ -76,8 +84,57 @@ function isSupportedImage(file) {
   const name = file.name.toLowerCase();
 
   if (type === "image/jpeg" || type === "image/png") return true;
-  if (/\.(jpe?g|png)$/.test(name)) return true;
+  if (type === "image/heic" || type === "image/heif") return true;
+  if (/\.(jpe?g|png|heic|heif)$/.test(name)) return true;
   return false;
+}
+
+async function normalizeImageFile(file) {
+  if (!isHeicFile(file)) return file;
+
+  setStatus("正在本地转换 HEIC/HEIF...");
+
+  try {
+    await waitForHeicConverter();
+    const converted = await window.heic2any({
+      blob: file,
+      toType: "image/jpeg",
+      quality: 0.98,
+    });
+    const blob = Array.isArray(converted) ? converted[0] : converted;
+    const name = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+
+    return new File([blob], name, {
+      type: "image/jpeg",
+      lastModified: file.lastModified || Date.now(),
+    });
+  } catch (error) {
+    console.error(error);
+    throw new Error("HEIC/HEIF 本地转码失败。请刷新页面重试，或先在 iPhone 相册中导出为 JPEG。");
+  }
+}
+
+function isHeicFile(file) {
+  const type = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+  return type === "image/heic" || type === "image/heif" || /\.(heic|heif)$/.test(name);
+}
+
+function waitForHeicConverter() {
+  if (window.heic2any) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const timer = window.setInterval(() => {
+      if (window.heic2any) {
+        window.clearInterval(timer);
+        resolve();
+      } else if (Date.now() - start > 10000) {
+        window.clearInterval(timer);
+        reject(new Error("HEIC converter did not load."));
+      }
+    }, 100);
+  });
 }
 
 async function decodeImage(file) {
@@ -321,6 +378,31 @@ async function prepareDownload(originalName) {
   return blob.size;
 }
 
+async function updatePreviewImage(canvas, image, type) {
+  const previewSize = fitSize(canvas.width, canvas.height, MAX_PREVIEW_EDGE);
+  const previewCanvas = document.createElement("canvas");
+  const context = previewCanvas.getContext("2d");
+
+  previewCanvas.width = previewSize.width;
+  previewCanvas.height = previewSize.height;
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(canvas, 0, 0, previewSize.width, previewSize.height);
+
+  const blob = await canvasToBlob(previewCanvas, "image/jpeg", 0.9);
+  const url = URL.createObjectURL(blob);
+
+  if (type === "source") {
+    if (sourcePreviewUrl) URL.revokeObjectURL(sourcePreviewUrl);
+    sourcePreviewUrl = url;
+  } else {
+    if (resultPreviewUrl) URL.revokeObjectURL(resultPreviewUrl);
+    resultPreviewUrl = url;
+  }
+
+  image.src = url;
+}
+
 function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -337,10 +419,22 @@ function resetOutput() {
   saveButton.disabled = true;
   sourceCard.classList.remove("has-image");
   resultCard.classList.remove("has-image");
+  sourcePreview.removeAttribute("src");
+  resultPreview.removeAttribute("src");
 
   if (latestBlobUrl) {
     URL.revokeObjectURL(latestBlobUrl);
     latestBlobUrl = "";
+  }
+
+  if (sourcePreviewUrl) {
+    URL.revokeObjectURL(sourcePreviewUrl);
+    sourcePreviewUrl = "";
+  }
+
+  if (resultPreviewUrl) {
+    URL.revokeObjectURL(resultPreviewUrl);
+    resultPreviewUrl = "";
   }
 }
 

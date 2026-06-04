@@ -4,7 +4,8 @@
 
 ## 功能
 
-- 支持 JPG、JPEG、PNG 上传。
+- 支持 JPG、JPEG、PNG、HEIC、HEIF 上传。
+- HEIC/HEIF 会先在浏览器本地转码为 JPEG，再继续 Canvas 调色。
 - 尽量通过浏览器 `imageOrientation: "from-image"` 能力修正 iPhone 照片方向。
 - 使用 Canvas 读取和处理像素。
 - 固定 deterministic preset：轻微提亮、暖白平衡、抬黑位、降对比、提亮中间调、压高光、低饱和、选择性压黄绿蓝。
@@ -19,7 +20,7 @@
 
 1. 进入 `cream-photo-editor-pwa` 文件夹。
 2. 双击 `index.html`，用浏览器打开。
-3. 上传一张 JPG 或 PNG 测试预览和保存。
+3. 上传一张 JPG、PNG、HEIC 或 HEIF 测试预览和保存。
 
 方式二：用本地静态服务器测试，体验更接近部署环境。
 
@@ -78,16 +79,16 @@ https://你的用户名.github.io/仓库名/
 
 ## iPhone 如何保存调色后的图片
 
-1. 打开网页并上传 JPG、JPEG 或 PNG。
+1. 打开网页并上传 JPG、JPEG、PNG、HEIC 或 HEIF。
 2. 等待调色后预览出现。
 3. 点击 `保存图片`。
 4. 如果出现系统分享面板，可以选择保存到照片或文件。
 5. 如果浏览器走下载逻辑，图片会下载为 JPG 文件，可在下载内容中打开后保存。
 
-## 关于 HEIC
+## 关于 HEIC / HEIF
 
-目前 MVP 主要保证 JPG、JPEG、PNG 链路稳定。HEIC 在不同 iPhone、iOS 版本和浏览器中支持不完全一致。如果上传 HEIC 不稳定，请先在 iPhone 相册中复制、分享或导出为 JPEG 后再上传。
+工具会优先在浏览器本地把 HEIC/HEIF 转成 JPEG，再继续调色。不同 iPhone、iOS 版本和浏览器对 HEIC/HEIF 的支持仍可能有差异。如果转码失败，请刷新页面重试，或先在 iPhone 相册中复制、分享或导出为 JPEG 后再上传。
 
 ## 隐私说明
 
-本工具没有后端，也不会上传照片。图片通过浏览器 File API 读取，在 Canvas 中完成像素级调色，最终在本地导出 JPG。
+本工具没有后端，也不会上传照片。图片通过浏览器 File API 读取，在本地完成 HEIC/HEIF 转码和 Canvas 像素级调色，最终在本地导出 JPG。页面会从 CDN 加载 HEIC/HEIF 转码脚本，但照片文件不会发送到 CDN 或服务器。
