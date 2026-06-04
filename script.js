@@ -16,8 +16,10 @@ const batchCount = document.querySelector("#batchCount");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const MAX_VIDEO_EDGE = 720;
-const VIDEO_FPS = 15;
+const APP_VERSION = "v1.9";
+const MAX_VIDEO_EDGE = 1440;
+const VIDEO_FPS = 30;
+const VIDEO_BITRATE = 16_000_000;
 const JPEG_QUALITY = 0.98;
 
 let sourcePreviewUrl = "";
@@ -143,7 +145,8 @@ async function processVideoFile(file, index, total) {
   const sourceUrl = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.src = sourceUrl;
-  video.muted = true;
+  video.muted = false;
+  video.volume = 1;
   video.playsInline = true;
   video.preload = "auto";
   video.crossOrigin = "anonymous";
@@ -157,9 +160,15 @@ async function processVideoFile(file, index, total) {
     resultCanvas.width = size.width;
     resultCanvas.height = size.height;
 
+    const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
+    await seekVideo(video, getVideoStartTime(video));
+    drawVideoFrame(video, sourceContext, size);
+    const posterUrl = await createPreviewUrl(resultCanvas);
+
     const outputStream = resultCanvas.captureStream(VIDEO_FPS);
+    const audioTrackCount = addOriginalAudioTracks(video, outputStream);
     const mimeType = getSupportedVideoMimeType();
-    const recorderOptions = { videoBitsPerSecond: 4_000_000 };
+    const recorderOptions = { videoBitsPerSecond: VIDEO_BITRATE };
     if (mimeType) recorderOptions.mimeType = mimeType;
     const recorder = new MediaRecorder(outputStream, recorderOptions);
     const chunks = [];
@@ -172,11 +181,11 @@ async function processVideoFile(file, index, total) {
       recorder.addEventListener("stop", resolve, { once: true });
     });
 
-    const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
-
     recorder.start(1000);
-    video.currentTime = 0;
-    await video.play();
+    drawVideoFrame(video, sourceContext, size);
+    await wait(80);
+    video.currentTime = getVideoStartTime(video);
+    const audioPlaybackAllowed = await playVideoForRecording(video);
 
     await renderVideoFrames(video, sourceContext, size, file.name, index, total);
     setStatus(`正在生成调色后视频：${file.name}`);
@@ -191,6 +200,7 @@ async function processVideoFile(file, index, total) {
 
     video.pause();
     videoPreview.src = url;
+    videoPreview.poster = posterUrl;
     videoPreview.muted = false;
     resultCard.classList.add("has-video");
     resultCard.classList.remove("has-image");
@@ -203,9 +213,11 @@ async function processVideoFile(file, index, total) {
       blob,
       url,
       previewUrl,
+      posterUrl,
       name: outputName,
       type: outputType,
       kind: "video",
+      audioPreserved: audioTrackCount > 0 && audioPlaybackAllowed,
       originalName: file.name,
       inputSize: file.size,
       outputSize: blob.size,
@@ -231,6 +243,7 @@ function addBatchItem(item) {
   image.className = "batch-thumb";
   image.src = item.previewUrl;
   if (item.kind === "video") {
+    if (item.posterUrl) image.poster = item.posterUrl;
     image.muted = true;
     image.controls = true;
     image.playsInline = true;
@@ -248,7 +261,8 @@ function addBatchItem(item) {
   const info = document.createElement("div");
   info.className = "batch-info";
   const typeText = item.kind === "video" ? "视频" : "图片";
-  info.textContent = `${typeText} ${item.outputWidth}×${item.outputHeight} / ${formatBytes(item.outputSize)}`;
+  const audioText = item.kind === "video" ? ` / ${item.audioPreserved ? "含声音" : "无声音"}` : "";
+  info.textContent = `${typeText} ${item.outputWidth}×${item.outputHeight} / ${formatBytes(item.outputSize)}${audioText}`;
 
   const link = document.createElement("a");
   link.className = "item-download";
@@ -380,8 +394,7 @@ async function renderVideoFrames(video, sourceContext, size, fileName, index, to
   let lastStatusTime = 0;
 
   while (!isVideoNearEnd(video)) {
-    sourceContext.drawImage(video, 0, 0, size.width, size.height);
-    applyCreamPreset(sourceCanvas, resultCanvas);
+    drawVideoFrame(video, sourceContext, size);
 
     const now = performance.now();
     if (now - lastStatusTime > 500) {
@@ -398,11 +411,74 @@ async function renderVideoFrames(video, sourceContext, size, fileName, index, to
   }
 
   if (video.readyState >= 2) {
-    sourceContext.drawImage(video, 0, 0, size.width, size.height);
-    applyCreamPreset(sourceCanvas, resultCanvas);
+    drawVideoFrame(video, sourceContext, size);
   }
   video.pause();
   setStatus(`正在调色视频第 ${index + 1} / ${total} 个：${fileName}，100%`);
+}
+
+function drawVideoFrame(video, sourceContext, size) {
+  sourceContext.drawImage(video, 0, 0, size.width, size.height);
+  applyCreamPreset(sourceCanvas, resultCanvas);
+}
+
+function getVideoStartTime(video) {
+  if (!Number.isFinite(video.duration) || video.duration <= 0.2) return 0;
+  return Math.min(0.08, video.duration / 10);
+}
+
+function seekVideo(video, time) {
+  return new Promise((resolve, reject) => {
+    const target = Math.min(Math.max(0, time), Math.max(0, (video.duration || 0) - 0.05));
+
+    if (Math.abs(video.currentTime - target) < 0.02 && video.readyState >= 2) {
+      resolve();
+      return;
+    }
+
+    const timeout = window.setTimeout(() => resolve(), 1200);
+    video.addEventListener("seeked", () => {
+      window.clearTimeout(timeout);
+      resolve();
+    }, { once: true });
+    video.addEventListener("error", () => {
+      window.clearTimeout(timeout);
+      reject(new Error("视频定位失败，请换一个 MOV 或 MP4 再试。"));
+    }, { once: true });
+    video.currentTime = target;
+  });
+}
+
+function addOriginalAudioTracks(video, outputStream) {
+  const streamGetter = video.captureStream || video.mozCaptureStream;
+  if (!streamGetter) return 0;
+
+  try {
+    const sourceStream = streamGetter.call(video);
+    const tracks = sourceStream.getAudioTracks();
+    tracks.forEach((track) => {
+      outputStream.addTrack(track);
+    });
+    return tracks.length;
+  } catch (error) {
+    console.warn("Audio track capture failed:", error);
+    return 0;
+  }
+}
+
+async function playVideoForRecording(video) {
+  try {
+    video.muted = false;
+    video.volume = 1;
+    await video.play();
+    return true;
+  } catch (error) {
+    console.warn("Unmuted video playback failed, retrying muted:", error);
+    video.muted = true;
+    video.volume = 0;
+    await video.play();
+    return false;
+  }
 }
 
 function waitForNextVideoFrame(video) {
@@ -763,8 +839,11 @@ function resetOutput() {
   saveAllButton.disabled = true;
   sourceCard.classList.remove("has-image");
   resultCard.classList.remove("has-image");
+  resultCard.classList.remove("has-video");
   sourcePreview.removeAttribute("src");
   resultPreview.removeAttribute("src");
+  videoPreview.removeAttribute("src");
+  videoPreview.removeAttribute("poster");
   batchSection.classList.remove("has-results");
   batchResults.textContent = "";
   batchCount.textContent = "0 张";
@@ -772,6 +851,9 @@ function resetOutput() {
   batchItems.forEach((item) => {
     URL.revokeObjectURL(item.url);
     if (item.previewUrl !== item.url) URL.revokeObjectURL(item.previewUrl);
+    if (item.posterUrl && item.posterUrl !== item.url && item.posterUrl !== item.previewUrl) {
+      URL.revokeObjectURL(item.posterUrl);
+    }
   });
   batchItems = [];
 

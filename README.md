@@ -1,12 +1,14 @@
 # 奶油感产品图自动调色工具
 
+当前版本：`v1.9`
+
 一个纯前端 MVP：用户在 iPhone 浏览器中上传一张或多张照片，也可以上传短视频，浏览器本地使用 Canvas API 完成固定预设调色，预览后保存 JPG 图片或调色后视频。照片和视频不会上传到服务器。
 
 ## 功能
 
 - 支持 JPG、JPEG、PNG、HEIC、HEIF、MOV、MP4 上传。
 - 支持一次选择多张图片，按顺序批量调色。
-- 支持 MOV/MP4 短视频逐帧调色并导出视频。
+- 支持 MOV/MP4 短视频逐帧调色并导出视频，优先使用高质量输出并尝试保留原视频声音。
 - HEIC/HEIF 会先在浏览器本地转码为 JPEG，再继续 Canvas 调色。
 - 尽量通过浏览器 `imageOrientation: "from-image"` 能力修正 iPhone 照片方向。
 - 使用 Canvas 读取和处理像素。
@@ -92,7 +94,7 @@ https://你的用户名.github.io/仓库名/
 
 Live Photo 通常由一张照片和一段短视频组成。iPhone Safari 有时只会把 Live Photo 的静态照片交给网页，这种情况下工具只能调色静态封面。如果你要调色动态部分，请先在 iPhone 相册中把 Live Photo 存储为视频，再上传生成的 MOV/MP4。工具会在浏览器本地逐帧调色并导出视频。
 
-视频导出依赖浏览器的 `MediaRecorder` 和 `canvas.captureStream` 能力。不同 iOS 版本可能导出 MP4 或 WebM；建议优先处理 Live Photo 这种几秒钟的短视频。
+视频导出依赖浏览器的 `MediaRecorder` 和 `canvas.captureStream` 能力。不同 iOS 版本可能导出 MP4 或 WebM；建议优先处理 Live Photo 这种几秒钟的短视频。工具会尽量保留原视频声音，如果 Safari 阻止带声音播放或浏览器无法捕获音轨，则会退回为无声音视频。
 
 ## 关于 HEIC / HEIF
 

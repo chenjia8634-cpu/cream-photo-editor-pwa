@@ -16,6 +16,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html {
   min-height: 100%;
   background: var(--bg);
@@ -65,6 +69,14 @@ h1 {
   font-size: clamp(28px, 9vw, 40px);
   line-height: 1.08;
   font-weight: 760;
+}
+
+.version-badge {
+  display: inline-block;
+  vertical-align: baseline;
+  color: var(--muted);
+  font-size: 0.42em;
+  font-weight: 720;
 }
 
 h2 {
