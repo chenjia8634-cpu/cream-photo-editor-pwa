@@ -16,7 +16,7 @@ const batchCount = document.querySelector("#batchCount");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v2.0";
+const APP_VERSION = "v2.1";
 const JPEG_QUALITY = 0.98;
 
 let sourcePreviewUrl = "";
@@ -381,13 +381,61 @@ async function loadFfmpeg() {
   ffmpeg.on("log", ({ message }) => console.log(message));
 
   const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+  const coreURL = await downloadToBlobUrl(`${baseURL}/ffmpeg-core.js`, "text/javascript", "视频引擎 JS", 0, 15);
+  const wasmURL = await downloadToBlobUrl(`${baseURL}/ffmpeg-core.wasm`, "application/wasm", "视频引擎 WASM", 15, 100);
+
+  setStatus("视频引擎下载完成，正在初始化...");
   await ffmpeg.load({
-    coreURL: await helpers.toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-    wasmURL: await helpers.toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+    coreURL,
+    wasmURL,
   });
 
   ffmpegInstance = ffmpeg;
   return ffmpegInstance;
+}
+
+async function downloadToBlobUrl(url, mimeType, label, startPercent, endPercent) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${label} 下载失败，请检查网络后重试。`);
+
+  const total = Number(response.headers.get("content-length")) || 0;
+  const reader = response.body && response.body.getReader ? response.body.getReader() : null;
+
+  if (!reader) {
+    setStatus(`正在下载${label}...`);
+    const blob = await response.blob();
+    setStatus(`${label} 下载完成：${formatBytes(blob.size)}`);
+    return URL.createObjectURL(new Blob([blob], { type: mimeType }));
+  }
+
+  const chunks = [];
+  let loaded = 0;
+  let lastUpdate = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    chunks.push(value);
+    loaded += value.byteLength;
+
+    const now = performance.now();
+    if (now - lastUpdate > 160) {
+      const percent = total
+        ? startPercent + (loaded / total) * (endPercent - startPercent)
+        : null;
+      const loadedText = total
+        ? `${formatBytes(loaded)} / ${formatBytes(total)}`
+        : `${formatBytes(loaded)}`;
+      const percentText = percent === null ? "" : `，总进度 ${Math.min(99, Math.round(percent))}%`;
+      setStatus(`正在下载${label}：${loadedText}${percentText}`);
+      lastUpdate = now;
+    }
+  }
+
+  const blob = new Blob(chunks, { type: mimeType });
+  setStatus(`${label} 下载完成：${formatBytes(blob.size)}`);
+  return URL.createObjectURL(blob);
 }
 
 async function readVideoMetadata(file) {
