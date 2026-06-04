@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="奶油调色">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>奶油感产品图自动调色工具 v2.7</title>
+    <title>奶油感产品图自动调色工具 v2.8</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
   </head>
@@ -15,7 +15,7 @@
     <main class="app-shell">
       <header class="app-header">
         <p class="eyebrow">本地浏览器处理 · 不上传照片</p>
-        <h1>奶油感产品图自动调色工具 <span class="version-badge">v2.7</span></h1>
+        <h1>奶油感产品图自动调色工具 <span class="version-badge">v2.8</span></h1>
       </header>
 
       <section class="panel upload-panel" aria-label="上传照片">
@@ -34,7 +34,10 @@
           <output id="strengthValue" for="strengthSlider">100%</output>
         </div>
         <input id="strengthSlider" class="strength-slider" type="range" min="0" max="100" step="5" value="100">
-        <p class="control-hint">上传前调整强度；批量处理会按当前强度生成。</p>
+        <div class="control-actions">
+          <button id="reprocessButton" class="small-action-button" type="button" disabled>重新用当前强度处理</button>
+        </div>
+        <p class="control-hint">调完强度后，可点按钮重新生成当前图片。</p>
       </section>
 
       <section id="statusPanel" class="status-panel" aria-live="polite">
@@ -49,7 +52,7 @@
 
         <article class="preview-card">
           <div class="preview-head">
-            <h2>调色后</h2>
+            <h2>调色后 <span id="currentIndexBadge" class="current-index-badge">未选择</span></h2>
             <button id="compareButton" class="compare-button" type="button" disabled>按住看原图</button>
           </div>
           <img id="resultPreview" class="preview-image" alt="调色后预览">

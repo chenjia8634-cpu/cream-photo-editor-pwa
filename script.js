@@ -1,4 +1,4 @@
-const input = document.querySelector("#photoInput");
+﻿const input = document.querySelector("#photoInput");
 const sourceCanvas = document.querySelector("#sourceCanvas");
 const resultCanvas = document.querySelector("#resultCanvas");
 const sourcePreview = document.querySelector("#sourcePreview");
@@ -16,10 +16,12 @@ const batchCount = document.querySelector("#batchCount");
 const strengthSlider = document.querySelector("#strengthSlider");
 const strengthValue = document.querySelector("#strengthValue");
 const compareButton = document.querySelector("#compareButton");
+const reprocessButton = document.querySelector("#reprocessButton");
+const currentIndexBadge = document.querySelector("#currentIndexBadge");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v2.7";
+const APP_VERSION = "v2.8";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -36,6 +38,11 @@ let ffmpegHelpers = null;
 strengthSlider.addEventListener("input", () => {
   presetStrength = Number(strengthSlider.value) / 100;
   strengthValue.textContent = `${strengthSlider.value}%`;
+});
+
+reprocessButton.addEventListener("click", async () => {
+  if (!selectedItem || selectedItem.kind !== "image") return;
+  await reprocessSelectedImage();
 });
 
 compareButton.addEventListener("pointerdown", (event) => {
@@ -80,7 +87,7 @@ input.addEventListener("change", async (event) => {
     const file = files[index];
 
     try {
-      setStatus(`正在处理第 ${index + 1} / ${files.length} 张：${file.name}`);
+      setStatus(`正在处理第 ${index + 1} / ${files.length} 个：${file.name}`);
       const item = isSupportedVideo(file)
         ? await processVideoFile(file, index, files.length)
         : await processFile(file, index, files.length);
@@ -98,7 +105,7 @@ input.addEventListener("change", async (event) => {
     saveButton.disabled = false;
     saveAllButton.disabled = false;
     const totalSize = batchItems.reduce((sum, item) => sum + item.blob.size, 0);
-    setStatus(`批量调色完成：成功 ${successCount} / ${files.length} 张，输出合计 ${formatBytes(totalSize)}。照片只在浏览器本地处理。`);
+    setStatus(`批量调色完成：成功 ${successCount} / ${files.length} 个，输出合计 ${formatBytes(totalSize)}。照片只在浏览器本地处理。`);
   } else {
     setStatus("没有文件处理成功，请换 JPG、PNG、HEIC、HEIF、MOV 或 MP4 再试。");
   }
@@ -118,7 +125,7 @@ saveAllButton.addEventListener("click", async () => {
     try {
       await navigator.share({
         files,
-        title: "奶油感产品图",
+        title: "濂舵补鎰熶骇鍝佸浘",
       });
       return;
     } catch (error) {
@@ -168,6 +175,7 @@ async function processFile(file, index, total) {
     name: outputName,
     type: "image/jpeg",
     kind: "image",
+    sourceFile: imageFile,
     originalName: file.name,
     inputSize: file.size,
     outputSize: blob.size,
@@ -183,7 +191,7 @@ async function processVideoFile(file, index, total) {
     return await processVideoFileCompat(file, index, total);
   }
 
-  setStatus(`正在加载高质量视频引擎，首次使用会稍慢...`);
+  setStatus(`姝ｅ湪鍔犺浇楂樿川閲忚棰戝紩鎿庯紝棣栨浣跨敤浼氱◢鎱?..`);
 
   const [metadata, posterUrl, ffmpeg] = await Promise.all([
     readVideoMetadata(file),
@@ -240,7 +248,7 @@ async function processVideoFile(file, index, total) {
     ]);
   }
 
-  setStatus(`正在生成调色后视频：${file.name}`);
+  setStatus(`姝ｅ湪鐢熸垚璋冭壊鍚庤棰戯細${file.name}`);
   const data = await ffmpeg.readFile(outputFsName);
   const blob = new Blob([data.buffer], { type: "video/mp4" });
   const url = URL.createObjectURL(blob);
@@ -280,7 +288,7 @@ async function processVideoFile(file, index, total) {
 
 async function processVideoFileCompat(file, index, total) {
   if (!supportsCompatVideoExport()) {
-    throw new Error("当前浏览器不支持 iPhone 兼容视频调色。请升级 Safari，或在电脑浏览器中使用高质量模式。");
+    throw new Error("当前浏览器不支持 iPhone 兼容视频调色。请升级 Safari，或在电脑浏览器中使用。");
   }
 
   setStatus(`正在使用 iPhone 兼容模式调色视频第 ${index + 1} / ${total} 个：${file.name}`);
@@ -460,6 +468,7 @@ function stopStreamTracks(stream) {
 }
 
 function addBatchItem(item) {
+  item.index = batchItems.length + 1;
   batchItems.push(item);
   batchSection.classList.add("has-results");
   batchCount.textContent = `${batchItems.length} 张`;
@@ -476,8 +485,16 @@ function addBatchItem(item) {
     image.controls = true;
     image.playsInline = true;
   } else {
-    image.alt = `${item.originalName} 调色预览`;
+    image.alt = `${item.originalName} 璋冭壊棰勮`;
   }
+
+  const thumbWrap = document.createElement("div");
+  thumbWrap.className = "batch-thumb-wrap";
+
+  const indexBadge = document.createElement("span");
+  indexBadge.className = "thumb-index";
+  indexBadge.textContent = String(item.index);
+  thumbWrap.append(image, indexBadge);
 
   const meta = document.createElement("div");
   meta.className = "batch-meta";
@@ -488,9 +505,7 @@ function addBatchItem(item) {
 
   const info = document.createElement("div");
   info.className = "batch-info";
-  const typeText = item.kind === "video" ? "视频" : "图片";
-  const audioText = item.kind === "video" ? ` / ${item.audioPreserved ? "含声音" : "无声音"}` : "";
-  info.textContent = `${typeText} ${item.outputWidth}×${item.outputHeight} / ${formatBytes(item.outputSize)}${audioText}`;
+  info.textContent = getBatchItemInfoText(item);
 
   const link = document.createElement("a");
   link.className = "item-download";
@@ -498,8 +513,12 @@ function addBatchItem(item) {
   link.download = item.name;
   link.textContent = "下载";
 
+  item.element = article;
+  item.thumbElement = image;
+  item.infoElement = info;
+
   meta.append(name, info, link);
-  article.append(image, meta);
+  article.append(thumbWrap, meta);
   article.addEventListener("click", (event) => {
     if (event.target.closest("a, button, video")) return;
     selectBatchItem(item, article);
@@ -517,6 +536,7 @@ function selectBatchItem(item, article) {
   downloadLink.href = item.url;
   downloadLink.download = item.name;
   saveButton.disabled = false;
+  currentIndexBadge.textContent = item.index ? `第 ${item.index} 张` : "未选择";
 
   if (item.kind === "video") {
     sourceCard.classList.remove("has-image");
@@ -533,6 +553,7 @@ function selectBatchItem(item, article) {
     videoPreview.muted = false;
     videoPreview.preload = "metadata";
     compareButton.disabled = true;
+    reprocessButton.disabled = true;
     compareButton.textContent = "按住看原图";
     return;
   }
@@ -545,6 +566,7 @@ function selectBatchItem(item, article) {
   sourcePreview.src = item.sourcePreviewUrl || "";
   resultPreview.src = item.previewUrl;
   compareButton.disabled = !item.sourcePreviewUrl;
+  reprocessButton.disabled = !item.sourceFile;
   compareButton.textContent = "按住看原图";
 }
 
@@ -558,6 +580,52 @@ function restoreEditedCompare() {
   if (!selectedItem || selectedItem.kind !== "image") return;
   resultPreview.src = selectedItem.previewUrl;
   compareButton.textContent = "按住看原图";
+}
+
+function getBatchItemInfoText(item) {
+  const typeText = item.kind === "video" ? "视频" : "图片";
+  const audioText = item.kind === "video" ? ` / ${item.audioPreserved ? "含声音" : "无声音"}` : "";
+  return `${typeText} ${item.outputWidth}×${item.outputHeight} / ${formatBytes(item.outputSize)}${audioText}`;
+}
+
+async function reprocessSelectedImage() {
+  const item = selectedItem;
+  if (!item || item.kind !== "image" || !item.sourceFile) return;
+
+  reprocessButton.disabled = true;
+  saveButton.disabled = true;
+  setStatus(`姝ｅ湪鐢ㄥ綋鍓嶅己搴﹂噸鏂板鐞嗙 ${item.index} 寮狅細${item.originalName}`);
+
+  const bitmap = await decodeImage(item.sourceFile);
+  const size = fitSize(bitmap.width, bitmap.height, MAX_EXPORT_EDGE);
+  drawSource(bitmap, size.width, size.height);
+
+  applyCreamPreset(sourceCanvas, resultCanvas, presetStrength);
+  await updatePreviewImage(resultCanvas, resultPreview, "result");
+
+  const blob = await canvasToBlob(resultCanvas, "image/jpeg", JPEG_QUALITY);
+  const nextUrl = URL.createObjectURL(blob);
+  const nextPreviewUrl = await createPreviewUrl(resultCanvas);
+
+  URL.revokeObjectURL(item.url);
+  if (item.previewUrl !== item.url) URL.revokeObjectURL(item.previewUrl);
+
+  item.blob = blob;
+  item.url = nextUrl;
+  item.previewUrl = nextPreviewUrl;
+  item.outputSize = blob.size;
+  item.outputWidth = size.width;
+  item.outputHeight = size.height;
+
+  if (item.thumbElement) item.thumbElement.src = nextPreviewUrl;
+  if (item.infoElement) item.infoElement.textContent = getBatchItemInfoText(item);
+
+  downloadLink.href = item.url;
+  downloadLink.download = item.name;
+  resultPreview.src = item.previewUrl;
+  saveButton.disabled = false;
+  reprocessButton.disabled = false;
+  setStatus(`第 ${item.index} 张已按 ${strengthSlider.value}% 强度重新处理。`);
 }
 
 function addBatchError(fileName, message) {
@@ -593,7 +661,7 @@ async function saveBatchItem(item) {
     try {
       await navigator.share({
         files: [file],
-        title: "奶油感产品图",
+        title: "濂舵补鎰熶骇鍝佸浘",
       });
       return;
     } catch (error) {
@@ -1220,6 +1288,8 @@ function resetOutput() {
   saveAllButton.disabled = true;
   selectedItem = null;
   compareButton.disabled = true;
+  reprocessButton.disabled = true;
+  currentIndexBadge.textContent = "未选择";
   compareButton.textContent = "按住看原图";
   sourceCard.classList.remove("has-image");
   resultCard.classList.remove("has-image");
@@ -1230,7 +1300,7 @@ function resetOutput() {
   videoPreview.removeAttribute("poster");
   batchSection.classList.remove("has-results");
   batchResults.textContent = "";
-  batchCount.textContent = "0 张";
+  batchCount.textContent = `${batchItems.length} 张`;
 
   batchItems.forEach((item) => {
     URL.revokeObjectURL(item.url);
@@ -1279,3 +1349,4 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     });
   });
 }
+
