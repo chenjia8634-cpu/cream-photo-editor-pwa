@@ -219,6 +219,10 @@ h2 {
   font-size: 12px;
   font-weight: 720;
   touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .compare-button:disabled {

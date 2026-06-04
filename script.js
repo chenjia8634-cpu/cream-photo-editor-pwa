@@ -19,7 +19,7 @@ const compareButton = document.querySelector("#compareButton");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v2.6";
+const APP_VERSION = "v2.7";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -41,6 +41,24 @@ strengthSlider.addEventListener("input", () => {
 compareButton.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   showOriginalCompare();
+});
+
+compareButton.addEventListener("touchstart", (event) => {
+  event.preventDefault();
+  showOriginalCompare();
+}, { passive: false });
+
+compareButton.addEventListener("touchend", (event) => {
+  event.preventDefault();
+  restoreEditedCompare();
+}, { passive: false });
+
+compareButton.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+});
+
+compareButton.addEventListener("selectstart", (event) => {
+  event.preventDefault();
 });
 
 compareButton.addEventListener("pointerup", restoreEditedCompare);
