@@ -16,8 +16,8 @@ const batchCount = document.querySelector("#batchCount");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const MAX_VIDEO_EDGE = 1080;
-const VIDEO_FPS = 24;
+const MAX_VIDEO_EDGE = 720;
+const VIDEO_FPS = 15;
 const JPEG_QUALITY = 0.98;
 
 let sourcePreviewUrl = "";
@@ -57,7 +57,7 @@ input.addEventListener("change", async (event) => {
     const totalSize = batchItems.reduce((sum, item) => sum + item.blob.size, 0);
     setStatus(`批量调色完成：成功 ${successCount} / ${files.length} 张，输出合计 ${formatBytes(totalSize)}。照片只在浏览器本地处理。`);
   } else {
-    setStatus("没有照片处理成功，请换 JPG、PNG、HEIC 或 HEIF 再试。");
+    setStatus("没有文件处理成功，请换 JPG、PNG、HEIC、HEIF、MOV 或 MP4 再试。");
   }
 });
 
@@ -159,7 +159,7 @@ async function processVideoFile(file, index, total) {
 
     const outputStream = resultCanvas.captureStream(VIDEO_FPS);
     const mimeType = getSupportedVideoMimeType();
-    const recorderOptions = { videoBitsPerSecond: 8_000_000 };
+    const recorderOptions = { videoBitsPerSecond: 4_000_000 };
     if (mimeType) recorderOptions.mimeType = mimeType;
     const recorder = new MediaRecorder(outputStream, recorderOptions);
     const chunks = [];
@@ -179,9 +179,9 @@ async function processVideoFile(file, index, total) {
     await video.play();
 
     await renderVideoFrames(video, sourceContext, size, file.name, index, total);
+    setStatus(`正在生成调色后视频：${file.name}`);
 
-    recorder.stop();
-    await stopped;
+    await stopRecorder(recorder, stopped);
 
     const outputType = recorder.mimeType || mimeType || "video/mp4";
     const blob = new Blob(chunks, { type: outputType });
@@ -379,13 +379,13 @@ async function renderVideoFrames(video, sourceContext, size, fileName, index, to
   const startTime = performance.now();
   let lastStatusTime = 0;
 
-  while (!video.ended) {
+  while (!isVideoNearEnd(video)) {
     sourceContext.drawImage(video, 0, 0, size.width, size.height);
     applyCreamPreset(sourceCanvas, resultCanvas);
 
     const now = performance.now();
     if (now - lastStatusTime > 500) {
-      const progress = video.duration ? Math.min(99, Math.round((video.currentTime / video.duration) * 100)) : 0;
+      const progress = video.duration ? Math.min(98, Math.round((video.currentTime / video.duration) * 100)) : 0;
       setStatus(`正在调色视频第 ${index + 1} / ${total} 个：${fileName}，${progress}%`);
       lastStatusTime = now;
     }
@@ -397,18 +397,49 @@ async function renderVideoFrames(video, sourceContext, size, fileName, index, to
     }
   }
 
-  sourceContext.drawImage(video, 0, 0, size.width, size.height);
-  applyCreamPreset(sourceCanvas, resultCanvas);
+  if (video.readyState >= 2) {
+    sourceContext.drawImage(video, 0, 0, size.width, size.height);
+    applyCreamPreset(sourceCanvas, resultCanvas);
+  }
+  video.pause();
+  setStatus(`正在调色视频第 ${index + 1} / ${total} 个：${fileName}，100%`);
 }
 
 function waitForNextVideoFrame(video) {
   return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+
+    const timeout = window.setTimeout(done, 220);
+    video.addEventListener("ended", done, { once: true });
+
     if ("requestVideoFrameCallback" in video) {
-      video.requestVideoFrameCallback(() => resolve());
+      video.requestVideoFrameCallback(() => {
+        window.clearTimeout(timeout);
+        done();
+      });
     } else {
-      window.setTimeout(resolve, 1000 / VIDEO_FPS);
+      window.setTimeout(done, 1000 / VIDEO_FPS);
     }
   });
+}
+
+function isVideoNearEnd(video) {
+  if (video.ended) return true;
+  if (!Number.isFinite(video.duration) || video.duration <= 0) return false;
+  return video.currentTime >= Math.max(0, video.duration - 0.12);
+}
+
+async function stopRecorder(recorder, stopped) {
+  if (recorder.state !== "inactive") recorder.stop();
+  await Promise.race([
+    stopped,
+    wait(2500),
+  ]);
 }
 
 async function normalizeImageFile(file) {

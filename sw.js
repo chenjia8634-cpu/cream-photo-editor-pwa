@@ -1,4 +1,4 @@
-const CACHE_NAME = "cream-photo-editor-v7";
+const CACHE_NAME = "cream-photo-editor-v8";
 const APP_SHELL = [
   "./",
   "./index.html",
