@@ -26,7 +26,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.0";
+const APP_VERSION = "v3.1";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -46,45 +46,44 @@ const COLOR_PRESETS = {
     name: "奶油感产品图",
     mode: "legacy",
   },
-  creamy_warm_kawaii: {
-    name: "奶油暖白玩偶感",
+  warm_brown_soft_clean: {
+    name: "暖棕清透轻调",
     mode: "config",
     base: {
-      exposure_factor: 1.06,
-      red_multiplier: 1.035,
-      green_multiplier: 0.995,
-      blue_multiplier: 0.955,
-      black_lift: 0.025,
-      contrast_factor: 0.94,
-      saturation_factor: 0.93,
-      gamma: 1.06,
+      exposure_factor: 1.03,
+      red_multiplier: 1.018,
+      green_multiplier: 1.000,
+      blue_multiplier: 0.982,
+      black_lift: 0.008,
+      contrast_factor: 1.035,
+      saturation_factor: 1.02,
+      gamma: 1.02,
     },
     tone_curve: [
-      [0.00, 0.018],
-      [0.25, 0.285],
-      [0.50, 0.535],
-      [0.75, 0.755],
-      [0.90, 0.875],
-      [1.00, 0.975],
+      [0.00, 0.008],
+      [0.25, 0.265],
+      [0.50, 0.515],
+      [0.75, 0.765],
+      [0.90, 0.905],
+      [1.00, 0.992],
     ],
     selective_colors: [
-      { hue_range: [345, 15], saturation_multiplier: 0.96, lightness_shift: 0.012, hue_shift: 2 },
-      { hue_range: [15, 40], saturation_multiplier: 0.94, lightness_shift: 0.022, hue_shift: -2 },
-      { hue_range: [40, 75], saturation_multiplier: 0.88, lightness_shift: 0.025, hue_shift: -4 },
-      { hue_range: [75, 160], saturation_multiplier: 0.74, lightness_shift: 0.015, hue_shift: -6 },
-      { hue_range: [160, 200], saturation_multiplier: 0.78, lightness_shift: 0.018, hue_shift: -4 },
-      { hue_range: [200, 250], saturation_multiplier: 0.82, lightness_shift: 0.018, hue_shift: 3 },
-      { hue_range: [250, 300], saturation_multiplier: 0.90, lightness_shift: 0.018, hue_shift: 4 },
-      { hue_range: [300, 345], saturation_multiplier: 1.02, lightness_shift: 0.018, hue_shift: 3 },
+      { hue_range: [345, 15], saturation_multiplier: 1.02, lightness_shift: 0.004, hue_shift: 1 },
+      { hue_range: [15, 40], saturation_multiplier: 1.03, lightness_shift: 0.006, hue_shift: -1 },
+      { hue_range: [40, 75], saturation_multiplier: 1.04, lightness_shift: 0.008, hue_shift: -2 },
+      { hue_range: [75, 160], saturation_multiplier: 0.93, lightness_shift: 0.002, hue_shift: -3 },
+      { hue_range: [160, 200], saturation_multiplier: 0.92, lightness_shift: 0.002, hue_shift: -2 },
+      { hue_range: [200, 250], saturation_multiplier: 0.94, lightness_shift: 0.003, hue_shift: 2 },
+      { hue_range: [250, 300], saturation_multiplier: 0.96, lightness_shift: 0.002, hue_shift: 1 },
     ],
     highlight_protection: {
       enabled: true,
-      start: 0.84,
-      compression: 0.68,
+      start: 0.88,
+      compression: 0.72,
     },
     shadow_handling: {
-      lift: 0.018,
-      softness: 0.42,
+      lift: 0.010,
+      softness: 0.32,
     },
   },
 };
@@ -106,6 +105,7 @@ const CHANGELOG = [
   ["v2.8", "增加当前强度重新处理按钮，批量缩略图和当前预览显示对应序号。"],
   ["v2.9", "增加重新处理即时反馈、更新日志弹窗、多选保存，并让单项下载走系统保存弹窗。"],
   ["v3.0", "增加调色风格选择，并新增奶油暖白玩偶感预设。"],
+  ["v3.1", "将新增风格调整为暖棕清透轻调，更克制地保留木质暖棕和日常清透感。"],
 ];
 
 presetSelect.addEventListener("change", () => {
