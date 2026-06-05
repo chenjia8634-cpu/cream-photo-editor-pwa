@@ -1,6 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#f8f1e7"/>
-  <circle cx="256" cy="256" r="152" fill="#fffaf2" stroke="#d0ad82" stroke-width="24"/>
-  <circle cx="210" cy="214" r="34" fill="#c9a77d"/>
-  <path fill="#9d7953" d="M138 334c28-56 62-84 102-84 36 0 54 22 78 22 20 0 34-16 56-48 22 28 34 66 34 110H138z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="cream photo editor icon">
+  <defs>
+    <linearGradient id="bg" x1="78" y1="52" x2="430" y2="462" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fffaf2"/>
+      <stop offset="0.48" stop-color="#f6eadb"/>
+      <stop offset="1" stop-color="#ddc09b"/>
+    </linearGradient>
+    <linearGradient id="camera" x1="118" y1="150" x2="392" y2="382" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff7ea"/>
+      <stop offset="1" stop-color="#d8b684"/>
+    </linearGradient>
+    <radialGradient id="lens" cx="0" cy="0" r="1" gradientTransform="translate(256 286) rotate(90) scale(112)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff2e8"/>
+      <stop offset="0.35" stop-color="#e6b0a6"/>
+      <stop offset="0.7" stop-color="#a97855"/>
+      <stop offset="1" stop-color="#5d493b"/>
+    </radialGradient>
+    <filter id="shadow" x="54" y="76" width="408" height="390" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#7a5b3e" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="404" cy="116" r="34" fill="#f3d2b3" opacity="0.8"/>
+  <circle cx="102" cy="388" r="46" fill="#fff5e6" opacity="0.72"/>
+
+  <g filter="url(#shadow)">
+    <path fill="#b58d63" d="M172 157c8-20 18-30 34-30h92c16 0 27 10 34 30l8 20h40c30 0 54 24 54 54v148c0 30-24 54-54 54H132c-30 0-54-24-54-54V231c0-30 24-54 54-54h40l8-20z"/>
+    <path fill="url(#camera)" d="M130 206h250c16 0 29 13 29 29v141c0 16-13 29-29 29H130c-16 0-29-13-29-29V235c0-16 13-29 29-29z"/>
+    <path fill="#fff9ee" d="M198 160c4-10 10-14 20-14h70c10 0 16 4 20 14l10 26H188l10-26z"/>
+    <circle cx="256" cy="294" r="96" fill="#8f6d4e"/>
+    <circle cx="256" cy="294" r="76" fill="url(#lens)"/>
+    <circle cx="228" cy="260" r="22" fill="#fff7eb" opacity="0.58"/>
+    <circle cx="292" cy="331" r="18" fill="#573f33" opacity="0.3"/>
+    <rect x="126" y="232" width="62" height="34" rx="17" fill="#f1d8b5"/>
+    <circle cx="374" cy="239" r="18" fill="#a77d57"/>
+  </g>
+
+  <path fill="#ffffff" opacity="0.86" d="M365 93l10 27 27 10-27 10-10 27-10-27-27-10 27-10 10-27z"/>
+  <path fill="#f6c8c0" d="M135 116l7 18 18 7-18 7-7 18-7-18-18-7 18-7 7-18z"/>
+  <path fill="#8f6d4e" opacity="0.45" d="M393 382l6 15 15 6-15 6-6 15-6-15-15-6 15-6 6-15z"/>
 </svg>
