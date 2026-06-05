@@ -14,6 +14,7 @@ const downloadLink = document.querySelector("#downloadLink");
 const batchSection = document.querySelector("#batchSection");
 const batchResults = document.querySelector("#batchResults");
 const batchCount = document.querySelector("#batchCount");
+const presetSelect = document.querySelector("#presetSelect");
 const strengthSlider = document.querySelector("#strengthSlider");
 const strengthValue = document.querySelector("#strengthValue");
 const compareButton = document.querySelector("#compareButton");
@@ -25,7 +26,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v2.9";
+const APP_VERSION = "v3.0";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -36,8 +37,57 @@ let resultPreviewUrl = "";
 let batchItems = [];
 let selectedItem = null;
 let presetStrength = 1;
+let activePresetId = "cream_product";
 let ffmpegInstance = null;
 let ffmpegHelpers = null;
+
+const COLOR_PRESETS = {
+  cream_product: {
+    name: "奶油感产品图",
+    mode: "legacy",
+  },
+  creamy_warm_kawaii: {
+    name: "奶油暖白玩偶感",
+    mode: "config",
+    base: {
+      exposure_factor: 1.06,
+      red_multiplier: 1.035,
+      green_multiplier: 0.995,
+      blue_multiplier: 0.955,
+      black_lift: 0.025,
+      contrast_factor: 0.94,
+      saturation_factor: 0.93,
+      gamma: 1.06,
+    },
+    tone_curve: [
+      [0.00, 0.018],
+      [0.25, 0.285],
+      [0.50, 0.535],
+      [0.75, 0.755],
+      [0.90, 0.875],
+      [1.00, 0.975],
+    ],
+    selective_colors: [
+      { hue_range: [345, 15], saturation_multiplier: 0.96, lightness_shift: 0.012, hue_shift: 2 },
+      { hue_range: [15, 40], saturation_multiplier: 0.94, lightness_shift: 0.022, hue_shift: -2 },
+      { hue_range: [40, 75], saturation_multiplier: 0.88, lightness_shift: 0.025, hue_shift: -4 },
+      { hue_range: [75, 160], saturation_multiplier: 0.74, lightness_shift: 0.015, hue_shift: -6 },
+      { hue_range: [160, 200], saturation_multiplier: 0.78, lightness_shift: 0.018, hue_shift: -4 },
+      { hue_range: [200, 250], saturation_multiplier: 0.82, lightness_shift: 0.018, hue_shift: 3 },
+      { hue_range: [250, 300], saturation_multiplier: 0.90, lightness_shift: 0.018, hue_shift: 4 },
+      { hue_range: [300, 345], saturation_multiplier: 1.02, lightness_shift: 0.018, hue_shift: 3 },
+    ],
+    highlight_protection: {
+      enabled: true,
+      start: 0.84,
+      compression: 0.68,
+    },
+    shadow_handling: {
+      lift: 0.018,
+      softness: 0.42,
+    },
+  },
+};
 
 const CHANGELOG = [
   ["v1.0", "完成首版 MVP，支持 JPG/PNG 上传、Canvas 本地调色、原图/调色后预览和 JPG 保存。"],
@@ -55,7 +105,14 @@ const CHANGELOG = [
   ["v2.7", "修复 iPhone 长按原图对比按钮触发文字选取的问题。"],
   ["v2.8", "增加当前强度重新处理按钮，批量缩略图和当前预览显示对应序号。"],
   ["v2.9", "增加重新处理即时反馈、更新日志弹窗、多选保存，并让单项下载走系统保存弹窗。"],
+  ["v3.0", "增加调色风格选择，并新增奶油暖白玩偶感预设。"],
 ];
+
+presetSelect.addEventListener("change", () => {
+  activePresetId = presetSelect.value;
+  const presetName = COLOR_PRESETS[activePresetId]?.name || "当前风格";
+  setStatus(`已切换到「${presetName}」。如需应用到当前图片，请点重新用当前强度处理。`);
+});
 
 strengthSlider.addEventListener("input", () => {
   presetStrength = Number(strengthSlider.value) / 100;
@@ -988,6 +1045,22 @@ function createVideoFilter(strength) {
   const amount = clamp01(strength);
   if (amount <= 0.001) return "null";
 
+  const preset = COLOR_PRESETS[activePresetId] || COLOR_PRESETS.cream_product;
+  if (preset.mode === "config") {
+    const base = preset.base;
+    const brightness = ((base.exposure_factor - 1) * 0.65 * amount).toFixed(4);
+    const contrast = (1 + (base.contrast_factor - 1) * amount).toFixed(4);
+    const saturation = (1 + (base.saturation_factor - 1) * amount).toFixed(4);
+    const gamma = (1 + (base.gamma - 1) * amount).toFixed(4);
+    const rs = ((base.red_multiplier - 1) * 0.8 * amount).toFixed(4);
+    const gs = ((base.green_multiplier - 1) * 0.8 * amount).toFixed(4);
+    const bs = ((base.blue_multiplier - 1) * 0.8 * amount).toFixed(4);
+    return [
+      `eq=brightness=${brightness}:contrast=${contrast}:saturation=${saturation}:gamma=${gamma}`,
+      `colorbalance=rs=${rs}:gs=${gs}:bs=${bs}:rm=${rs}:gm=${gs}:bm=${bs}`,
+    ].join(",");
+  }
+
   const brightness = (0.035 * amount).toFixed(4);
   const contrast = (1 + (0.96 - 1) * amount).toFixed(4);
   const saturation = (1 + (0.94 - 1) * amount).toFixed(4);
@@ -1168,6 +1241,12 @@ function drawSource(image, width, height) {
 }
 
 function applyCreamPreset(source, target, strengthAmount = 1) {
+  const preset = COLOR_PRESETS[activePresetId] || COLOR_PRESETS.cream_product;
+  if (preset.mode === "config") {
+    applyConfigPreset(source, target, preset, strengthAmount);
+    return;
+  }
+
   const sourceContext = source.getContext("2d", { willReadFrequently: true });
   const targetContext = target.getContext("2d", { willReadFrequently: true });
   const imageData = sourceContext.getImageData(0, 0, source.width, source.height);
@@ -1247,6 +1326,100 @@ function applyCreamPreset(source, target, strengthAmount = 1) {
   targetContext.putImageData(imageData, 0, 0);
 }
 
+function applyConfigPreset(source, target, preset, strengthAmount = 1) {
+  const sourceContext = source.getContext("2d", { willReadFrequently: true });
+  const targetContext = target.getContext("2d", { willReadFrequently: true });
+  const imageData = sourceContext.getImageData(0, 0, source.width, source.height);
+  const data = imageData.data;
+  const amount = clamp01(strengthAmount);
+  const base = preset.base;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const pixel = i / 4;
+    const x = pixel % source.width;
+    const y = Math.floor(pixel / source.width);
+    const originalR = data[i] / 255;
+    const originalG = data[i + 1] / 255;
+    const originalB = data[i + 2] / 255;
+
+    let r = originalR * base.exposure_factor * base.red_multiplier;
+    let g = originalG * base.exposure_factor * base.green_multiplier;
+    let b = originalB * base.exposure_factor * base.blue_multiplier;
+
+    let hsl = rgbToHsl(r, g, b);
+
+    for (const color of preset.selective_colors || []) {
+      const mask = hueRangeMask(hsl.h, color.hue_range[0], color.hue_range[1]);
+      if (mask <= 0) continue;
+
+      hsl.s *= mix(1, color.saturation_multiplier, mask);
+      hsl.l = clamp01(hsl.l + color.lightness_shift * mask);
+      hsl.h = normalizeHue(hsl.h + color.hue_shift * mask);
+    }
+
+    hsl.s *= base.saturation_factor;
+    [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
+
+    const shadowLift = preset.shadow_handling?.lift || 0;
+    const blackLift = base.black_lift + shadowLift;
+    r = r * (1 - blackLift) + blackLift;
+    g = g * (1 - blackLift) + blackLift;
+    b = b * (1 - blackLift) + blackLift;
+
+    r = (r - 0.5) * base.contrast_factor + 0.5;
+    g = (g - 0.5) * base.contrast_factor + 0.5;
+    b = (b - 0.5) * base.contrast_factor + 0.5;
+
+    const gammaPower = 1 / Math.max(0.01, base.gamma);
+    r = Math.pow(clamp01(r), gammaPower);
+    g = Math.pow(clamp01(g), gammaPower);
+    b = Math.pow(clamp01(b), gammaPower);
+
+    r = applyToneCurve(r, preset.tone_curve);
+    g = applyToneCurve(g, preset.tone_curve);
+    b = applyToneCurve(b, preset.tone_curve);
+
+    if (preset.highlight_protection?.enabled) {
+      r = protectHighlight(r, preset.highlight_protection);
+      g = protectHighlight(g, preset.highlight_protection);
+      b = protectHighlight(b, preset.highlight_protection);
+    }
+
+    r = mix(originalR, r, amount);
+    g = mix(originalG, g, amount);
+    b = mix(originalB, b, amount);
+
+    const dither = (deterministicDither(x, y) / 255) * amount;
+    data[i] = toByte(r + dither);
+    data[i + 1] = toByte(g + dither);
+    data[i + 2] = toByte(b + dither);
+  }
+
+  targetContext.putImageData(imageData, 0, 0);
+}
+
+function applyToneCurve(value, points) {
+  const v = clamp01(value);
+  if (!points || points.length < 2) return v;
+
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const [x0, y0] = points[i];
+    const [x1, y1] = points[i + 1];
+    if (v >= x0 && v <= x1) {
+      const t = (v - x0) / Math.max(0.0001, x1 - x0);
+      return clamp01(mix(y0, y1, t));
+    }
+  }
+
+  return clamp01(points[points.length - 1][1]);
+}
+
+function protectHighlight(value, config) {
+  const v = clamp01(value);
+  if (v <= config.start) return v;
+  return clamp01(config.start + (v - config.start) * config.compression);
+}
+
 function toneCurve(value) {
   let v = clamp01(value);
   const midMask = 1 - Math.abs(v * 2 - 1);
@@ -1262,6 +1435,22 @@ function toneCurve(value) {
 
 function hueMask(hue, start, end) {
   return smoothstep(start, start + 10, hue) * (1 - smoothstep(end - 10, end, hue));
+}
+
+function hueRangeMask(hue, start, end) {
+  const normalizedHue = normalizeHue(hue);
+  const normalizedStart = normalizeHue(start);
+  const normalizedEnd = normalizeHue(end);
+
+  if (normalizedStart <= normalizedEnd) {
+    return normalizedHue >= normalizedStart && normalizedHue <= normalizedEnd ? 1 : 0;
+  }
+
+  return normalizedHue >= normalizedStart || normalizedHue <= normalizedEnd ? 1 : 0;
+}
+
+function normalizeHue(hue) {
+  return ((hue % 360) + 360) % 360;
 }
 
 function mix(a, b, t) {
