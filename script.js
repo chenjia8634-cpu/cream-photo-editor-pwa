@@ -26,7 +26,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.3";
+const APP_VERSION = "v3.4";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -86,6 +86,54 @@ const COLOR_PRESETS = {
       softness: 0.32,
     },
   },
+  pink_brown_home_kawaii: {
+    name: "粉棕居家玩偶感",
+    mode: "config",
+    adaptive: {
+      targetMedian: 0.42,
+      targetP95: 0.82,
+      targetP99: 0.90,
+      maxBrighten: 1.015,
+      maxDarken: 0.84,
+    },
+    base: {
+      exposure_factor: 0.99,
+      red_multiplier: 1.024,
+      green_multiplier: 0.998,
+      blue_multiplier: 0.972,
+      black_lift: 0.002,
+      contrast_factor: 1.045,
+      saturation_factor: 1.035,
+      gamma: 0.965,
+    },
+    tone_curve: [
+      [0.00, 0.004],
+      [0.18, 0.150],
+      [0.50, 0.470],
+      [0.75, 0.700],
+      [0.90, 0.820],
+      [1.00, 0.930],
+    ],
+    selective_colors: [
+      { hue_range: [345, 15], saturation_multiplier: 1.03, lightness_shift: -0.002, hue_shift: 1 },
+      { hue_range: [15, 42], saturation_multiplier: 1.06, lightness_shift: -0.004, hue_shift: -1 },
+      { hue_range: [42, 78], saturation_multiplier: 1.04, lightness_shift: -0.006, hue_shift: -3 },
+      { hue_range: [78, 165], saturation_multiplier: 0.78, lightness_shift: -0.006, hue_shift: -6 },
+      { hue_range: [165, 205], saturation_multiplier: 0.76, lightness_shift: -0.006, hue_shift: -4 },
+      { hue_range: [205, 252], saturation_multiplier: 0.82, lightness_shift: -0.004, hue_shift: 3 },
+      { hue_range: [252, 300], saturation_multiplier: 0.92, lightness_shift: -0.002, hue_shift: 3 },
+      { hue_range: [300, 345], saturation_multiplier: 1.08, lightness_shift: 0.002, hue_shift: 2 },
+    ],
+    highlight_protection: {
+      enabled: true,
+      start: 0.70,
+      compression: 0.42,
+    },
+    shadow_handling: {
+      lift: 0.003,
+      softness: 0.22,
+    },
+  },
 };
 
 const CHANGELOG = [
@@ -108,6 +156,7 @@ const CHANGELOG = [
   ["v3.1", "将新增风格调整为暖棕清透轻调，更克制地保留木质暖棕和日常清透感。"],
   ["v3.2", "微调暖棕清透轻调，降低曝光并加强高光保护，减少过曝感。"],
   ["v3.3", "继续降低暖棕清透轻调 EV，并更强压住白色高光区域。"],
+  ["v3.4", "新增粉棕居家玩偶感预设，按图片亮度自适应降低 EV、稳住暗部并保护白色高光。"],
 ];
 
 presetSelect.addEventListener("change", () => {
@@ -1335,6 +1384,11 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
   const data = imageData.data;
   const amount = clamp01(strengthAmount);
   const base = preset.base;
+  const stats = preset.adaptive ? analyzeImageStats(data) : null;
+  const adaptive = preset.adaptive ? createAdaptivePresetSettings(preset, stats) : null;
+  const exposureFactor = adaptive?.exposureFactor || base.exposure_factor;
+  const blackLiftBoost = adaptive?.blackLiftBoost || 0;
+  const highlightProtection = adaptive?.highlightProtection || preset.highlight_protection;
 
   for (let i = 0; i < data.length; i += 4) {
     const pixel = i / 4;
@@ -1344,9 +1398,9 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
     const originalG = data[i + 1] / 255;
     const originalB = data[i + 2] / 255;
 
-    let r = originalR * base.exposure_factor * base.red_multiplier;
-    let g = originalG * base.exposure_factor * base.green_multiplier;
-    let b = originalB * base.exposure_factor * base.blue_multiplier;
+    let r = originalR * exposureFactor * base.red_multiplier;
+    let g = originalG * exposureFactor * base.green_multiplier;
+    let b = originalB * exposureFactor * base.blue_multiplier;
 
     let hsl = rgbToHsl(r, g, b);
 
@@ -1363,7 +1417,7 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
     [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
 
     const shadowLift = preset.shadow_handling?.lift || 0;
-    const blackLift = base.black_lift + shadowLift;
+    const blackLift = base.black_lift + shadowLift + blackLiftBoost;
     r = r * (1 - blackLift) + blackLift;
     g = g * (1 - blackLift) + blackLift;
     b = b * (1 - blackLift) + blackLift;
@@ -1381,10 +1435,10 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
     g = applyToneCurve(g, preset.tone_curve);
     b = applyToneCurve(b, preset.tone_curve);
 
-    if (preset.highlight_protection?.enabled) {
-      r = protectHighlight(r, preset.highlight_protection);
-      g = protectHighlight(g, preset.highlight_protection);
-      b = protectHighlight(b, preset.highlight_protection);
+    if (highlightProtection?.enabled) {
+      r = protectHighlight(r, highlightProtection);
+      g = protectHighlight(g, highlightProtection);
+      b = protectHighlight(b, highlightProtection);
     }
 
     r = mix(originalR, r, amount);
@@ -1398,6 +1452,92 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
   }
 
   targetContext.putImageData(imageData, 0, 0);
+}
+
+function analyzeImageStats(data) {
+  const histogram = new Array(256).fill(0);
+  const pixelCount = data.length / 4;
+  const pixelStep = Math.max(1, Math.floor(pixelCount / 120000));
+  const byteStep = pixelStep * 4;
+  let samples = 0;
+  let whiteSamples = 0;
+  let warmSamples = 0;
+
+  for (let i = 0; i < data.length; i += byteStep) {
+    const r = data[i] / 255;
+    const g = data[i + 1] / 255;
+    const b = data[i + 2] / 255;
+    const luma = clamp01(r * 0.299 + g * 0.587 + b * 0.114);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const colorfulness = max - min;
+
+    histogram[Math.round(luma * 255)] += 1;
+    samples += 1;
+
+    if (luma > 0.82 && colorfulness < 0.16) whiteSamples += 1;
+    if (r > b + 0.035 && r >= g - 0.02 && luma > 0.18 && luma < 0.86) warmSamples += 1;
+  }
+
+  return {
+    p50: histogramPercentile(histogram, samples, 0.5),
+    p90: histogramPercentile(histogram, samples, 0.9),
+    p95: histogramPercentile(histogram, samples, 0.95),
+    p99: histogramPercentile(histogram, samples, 0.99),
+    whiteRatio: samples ? whiteSamples / samples : 0,
+    warmRatio: samples ? warmSamples / samples : 0,
+  };
+}
+
+function histogramPercentile(histogram, total, percentile) {
+  if (!total) return 0.5;
+
+  const target = total * percentile;
+  let count = 0;
+
+  for (let i = 0; i < histogram.length; i += 1) {
+    count += histogram[i];
+    if (count >= target) return i / 255;
+  }
+
+  return 1;
+}
+
+function createAdaptivePresetSettings(preset, stats) {
+  const adaptive = preset.adaptive;
+  const base = preset.base;
+  const medianRatio = adaptive.targetMedian / Math.max(0.08, stats.p50);
+  const highRatio = adaptive.targetP95 / Math.max(0.12, stats.p95);
+  const whitePressure = smoothstep(0.025, 0.12, stats.whiteRatio);
+  const highlightPressure = smoothstep(0.78, 0.96, stats.p95);
+  const p99Pressure = smoothstep(adaptive.targetP99, 0.99, stats.p99);
+  let exposureAdjust = medianRatio * 0.72 + highRatio * 0.28;
+
+  exposureAdjust -= whitePressure * 0.055;
+  exposureAdjust -= highlightPressure * 0.045;
+  exposureAdjust -= p99Pressure * 0.035;
+  exposureAdjust = clampRange(exposureAdjust, adaptive.maxDarken, adaptive.maxBrighten);
+
+  const highlightStart = clampRange(
+    preset.highlight_protection.start - highlightPressure * 0.07 - whitePressure * 0.05 - p99Pressure * 0.04,
+    0.62,
+    preset.highlight_protection.start,
+  );
+  const highlightCompression = clampRange(
+    preset.highlight_protection.compression - highlightPressure * 0.12 - whitePressure * 0.12 - p99Pressure * 0.08,
+    0.26,
+    preset.highlight_protection.compression,
+  );
+
+  return {
+    exposureFactor: base.exposure_factor * exposureAdjust,
+    blackLiftBoost: stats.p50 < 0.28 ? 0.004 : 0,
+    highlightProtection: {
+      enabled: true,
+      start: highlightStart,
+      compression: highlightCompression,
+    },
+  };
 }
 
 function applyToneCurve(value, points) {
@@ -1622,6 +1762,10 @@ function setStatus(message) {
 
 function clamp01(value) {
   return Math.min(1, Math.max(0, value));
+}
+
+function clampRange(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function toByte(value) {
