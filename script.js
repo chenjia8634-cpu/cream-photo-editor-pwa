@@ -26,7 +26,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.4";
+const APP_VERSION = "v3.5";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -90,48 +90,58 @@ const COLOR_PRESETS = {
     name: "粉棕居家玩偶感",
     mode: "config",
     adaptive: {
-      targetMedian: 0.42,
-      targetP95: 0.82,
-      targetP99: 0.90,
-      maxBrighten: 1.015,
-      maxDarken: 0.84,
+      targetMedian: 0.52,
+      targetP95: 0.88,
+      targetP99: 0.94,
+      maxBrighten: 1.08,
+      maxDarken: 0.98,
     },
     base: {
-      exposure_factor: 0.99,
-      red_multiplier: 1.024,
-      green_multiplier: 0.998,
-      blue_multiplier: 0.972,
-      black_lift: 0.002,
-      contrast_factor: 1.045,
-      saturation_factor: 1.035,
-      gamma: 0.965,
+      exposure_factor: 1.015,
+      red_multiplier: 1.018,
+      green_multiplier: 1.002,
+      blue_multiplier: 0.982,
+      black_lift: 0.006,
+      contrast_factor: 0.985,
+      saturation_factor: 1.018,
+      gamma: 1.025,
     },
     tone_curve: [
-      [0.00, 0.004],
-      [0.18, 0.150],
-      [0.50, 0.470],
-      [0.75, 0.700],
-      [0.90, 0.820],
-      [1.00, 0.930],
+      [0.00, 0.006],
+      [0.18, 0.190],
+      [0.50, 0.515],
+      [0.75, 0.758],
+      [0.90, 0.875],
+      [1.00, 0.960],
     ],
     selective_colors: [
-      { hue_range: [345, 15], saturation_multiplier: 1.03, lightness_shift: -0.002, hue_shift: 1 },
-      { hue_range: [15, 42], saturation_multiplier: 1.06, lightness_shift: -0.004, hue_shift: -1 },
-      { hue_range: [42, 78], saturation_multiplier: 1.04, lightness_shift: -0.006, hue_shift: -3 },
-      { hue_range: [78, 165], saturation_multiplier: 0.78, lightness_shift: -0.006, hue_shift: -6 },
-      { hue_range: [165, 205], saturation_multiplier: 0.76, lightness_shift: -0.006, hue_shift: -4 },
-      { hue_range: [205, 252], saturation_multiplier: 0.82, lightness_shift: -0.004, hue_shift: 3 },
-      { hue_range: [252, 300], saturation_multiplier: 0.92, lightness_shift: -0.002, hue_shift: 3 },
-      { hue_range: [300, 345], saturation_multiplier: 1.08, lightness_shift: 0.002, hue_shift: 2 },
+      { hue_range: [345, 15], saturation_multiplier: 1.025, lightness_shift: 0.004, hue_shift: 1 },
+      { hue_range: [15, 42], saturation_multiplier: 1.035, lightness_shift: 0.006, hue_shift: -1 },
+      { hue_range: [42, 78], saturation_multiplier: 1.025, lightness_shift: 0.004, hue_shift: -3 },
+      { hue_range: [78, 165], saturation_multiplier: 0.84, lightness_shift: 0.000, hue_shift: -6 },
+      { hue_range: [165, 205], saturation_multiplier: 0.82, lightness_shift: 0.000, hue_shift: -4 },
+      { hue_range: [205, 252], saturation_multiplier: 0.88, lightness_shift: 0.002, hue_shift: 3 },
+      { hue_range: [252, 300], saturation_multiplier: 0.94, lightness_shift: 0.002, hue_shift: 3 },
+      { hue_range: [300, 345], saturation_multiplier: 1.075, lightness_shift: 0.006, hue_shift: 2 },
     ],
     highlight_protection: {
       enabled: true,
-      start: 0.70,
-      compression: 0.42,
+      start: 0.80,
+      compression: 0.62,
     },
     shadow_handling: {
-      lift: 0.003,
-      softness: 0.22,
+      lift: 0.006,
+      softness: 0.26,
+    },
+    luma_guard: {
+      enabled: true,
+      highlightStart: 0.78,
+      maxMidDrop: 0.045,
+      maxHighlightDrop: 0.095,
+      minMidRatio: 0.94,
+      minHighlightRatio: 0.88,
+      maxHighlightLuma: 0.925,
+      maxHighlightRise: 0.018,
     },
   },
 };
@@ -157,6 +167,7 @@ const CHANGELOG = [
   ["v3.2", "微调暖棕清透轻调，降低曝光并加强高光保护，减少过曝感。"],
   ["v3.3", "继续降低暖棕清透轻调 EV，并更强压住白色高光区域。"],
   ["v3.4", "新增粉棕居家玩偶感预设，按图片亮度自适应降低 EV、稳住暗部并保护白色高光。"],
+  ["v3.5", "重做粉棕居家玩偶感的自适应算法，加入亮度保护护栏，避免整图发黑并保留白色层次。"],
 ];
 
 presetSelect.addEventListener("change", () => {
@@ -1441,6 +1452,10 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
       b = protectHighlight(b, highlightProtection);
     }
 
+    if (preset.luma_guard?.enabled) {
+      [r, g, b] = applyLumaGuard(originalR, originalG, originalB, r, g, b, preset.luma_guard);
+    }
+
     r = mix(originalR, r, amount);
     g = mix(originalG, g, amount);
     b = mix(originalB, b, amount);
@@ -1538,6 +1553,37 @@ function createAdaptivePresetSettings(preset, stats) {
       compression: highlightCompression,
     },
   };
+}
+
+function applyLumaGuard(originalR, originalG, originalB, r, g, b, config) {
+  const originalLuma = getLuma(originalR, originalG, originalB);
+  const targetLuma = getLuma(r, g, b);
+  const highlightMask = smoothstep(config.highlightStart, 1, originalLuma);
+  const maxDrop = mix(config.maxMidDrop, config.maxHighlightDrop, highlightMask);
+  const minRatio = mix(config.minMidRatio, config.minHighlightRatio, highlightMask);
+  const minLuma = Math.max(originalLuma - maxDrop, originalLuma * minRatio);
+  let guardedLuma = Math.max(targetLuma, minLuma);
+
+  if (highlightMask > 0) {
+    const maxLuma = Math.min(config.maxHighlightLuma, originalLuma + config.maxHighlightRise);
+    guardedLuma = Math.min(guardedLuma, maxLuma);
+  }
+
+  return shiftRgbToLuma(r, g, b, guardedLuma);
+}
+
+function shiftRgbToLuma(r, g, b, targetLuma) {
+  const currentLuma = getLuma(r, g, b);
+  const delta = clamp01(targetLuma) - currentLuma;
+  return [
+    clamp01(r + delta),
+    clamp01(g + delta),
+    clamp01(b + delta),
+  ];
+}
+
+function getLuma(r, g, b) {
+  return clamp01(r * 0.299 + g * 0.587 + b * 0.114);
 }
 
 function applyToneCurve(value, points) {
