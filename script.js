@@ -29,7 +29,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.8";
+const APP_VERSION = "v3.9";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -90,77 +90,67 @@ const COLOR_PRESETS = {
     },
   },
   pink_brown_home_kawaii: {
-    name: "粉棕居家玩偶感",
-    mode: "config",
-    adaptive: {
-      targetMedian: 0.48,
-      targetP95: 0.87,
-      targetP99: 0.94,
-      maxBrighten: 1.055,
-      maxDarken: 0.98,
-    },
-    base: {
-      exposure_factor: 1.005,
-      red_multiplier: 1.008,
-      green_multiplier: 1.000,
-      blue_multiplier: 0.992,
-      black_lift: 0.004,
-      contrast_factor: 1.028,
-      saturation_factor: 1.042,
-      gamma: 1.008,
-    },
-    tone_curve: [
-      [0.00, 0.004],
-      [0.18, 0.170],
-      [0.50, 0.505],
-      [0.75, 0.750],
-      [0.90, 0.868],
-      [1.00, 0.958],
-    ],
-    selective_colors: [
-      { hue_range: [345, 15], saturation_multiplier: 1.025, lightness_shift: 0.004, hue_shift: 1 },
-      { hue_range: [15, 42], saturation_multiplier: 1.055, lightness_shift: 0.002, hue_shift: -1 },
-      { hue_range: [42, 78], saturation_multiplier: 1.045, lightness_shift: 0.000, hue_shift: -3 },
-      { hue_range: [78, 165], saturation_multiplier: 0.90, lightness_shift: -0.002, hue_shift: -5 },
-      { hue_range: [165, 205], saturation_multiplier: 0.88, lightness_shift: -0.002, hue_shift: -3 },
-      { hue_range: [205, 252], saturation_multiplier: 0.96, lightness_shift: 0.000, hue_shift: 2 },
-      { hue_range: [252, 300], saturation_multiplier: 0.94, lightness_shift: 0.002, hue_shift: 3 },
-      { hue_range: [300, 345], saturation_multiplier: 1.09, lightness_shift: 0.004, hue_shift: 2 },
-    ],
-    highlight_protection: {
-      enabled: true,
-      start: 0.80,
-      compression: 0.62,
-    },
-    shadow_handling: {
-      lift: 0.006,
-      softness: 0.26,
-    },
-    luma_guard: {
-      enabled: true,
-      highlightStart: 0.78,
-      maxMidDrop: 0.045,
-      maxHighlightDrop: 0.095,
-      minMidRatio: 0.94,
-      minHighlightRatio: 0.88,
-      maxHighlightLuma: 0.925,
-      maxHighlightRise: 0.018,
-    },
-    neutral_protection: {
-      enabled: true,
-      lumaStart: 0.48,
-      saturationEnd: 0.24,
-      minStrength: 0.12,
-      softStrength: 0.38,
-    },
-    shadow_depth: {
-      enabled: true,
-      start: 0.55,
-      amount: 0.026,
-      deepAmount: 0.012,
-      protectHighlightStart: 0.78,
-    },
+  name: "粉棕居家玩偶感",
+  mode: "config",
+  adaptive: {
+    targetMedian: 0.50,
+    targetP95: 0.88,
+    targetP99: 0.94,
+    maxBrighten: 1.045,
+    maxDarken: 0.985,
   },
+  base: {
+    exposure_factor: 1.006,
+    red_multiplier: 1.004,
+    green_multiplier: 1.000,
+    blue_multiplier: 0.996,
+    black_lift: 0.003,
+    contrast_factor: 1.018,
+    saturation_factor: 1.018,
+    gamma: 1.006,
+  },
+  tone_curve: [
+    [0.00, 0.004],
+    [0.18, 0.172],
+    [0.50, 0.505],
+    [0.75, 0.752],
+    [0.90, 0.872],
+    [1.00, 0.965],
+  ],
+  selective_colors: [
+    { hue_range: [345, 15], saturation_multiplier: 1.015, lightness_shift: 0.002, hue_shift: 0 },
+    { hue_range: [15, 42], saturation_multiplier: 1.025, lightness_shift: 0.001, hue_shift: -1 },
+    { hue_range: [42, 78], saturation_multiplier: 1.018, lightness_shift: 0.000, hue_shift: -2 },
+    { hue_range: [78, 165], saturation_multiplier: 0.92, lightness_shift: -0.001, hue_shift: -4 },
+    { hue_range: [165, 205], saturation_multiplier: 0.90, lightness_shift: -0.001, hue_shift: -3 },
+    { hue_range: [205, 252], saturation_multiplier: 0.98, lightness_shift: 0.000, hue_shift: 1 },
+    { hue_range: [252, 300], saturation_multiplier: 0.96, lightness_shift: 0.000, hue_shift: 1 },
+    { hue_range: [300, 345], saturation_multiplier: 1.035, lightness_shift: 0.002, hue_shift: 1 },
+  ],
+  highlight_protection: {
+    enabled: true,
+    start: 0.82,
+    compression: 0.66,
+  },
+  shadow_handling: {
+    lift: 0.004,
+    softness: 0.26,
+  },
+  neutral_protection: {
+    enabled: true,
+    lumaStart: 0.45,
+    saturationEnd: 0.22,
+    minStrength: 0.04,
+    softStrength: 0.22,
+  },
+  shadow_depth: {
+    enabled: true,
+    start: 0.52,
+    amount: 0.018,
+    deepAmount: 0.008,
+    protectHighlightStart: 0.78,
+  },
+},
 };
 
 const CHANGELOG = [
@@ -188,6 +178,7 @@ const CHANGELOG = [
   ["v3.6", "增加预览上一张/下一张快捷按钮，并按参考图统计重调粉棕居家玩偶感，减少发灰、增强暗部对比和颜色保留。"],
   ["v3.7", "修复中性白色区域偏红和预览块状感，翻页按钮移到序号旁，并增加应用到全部照片功能。"],
   ["v3.8", "重做粉棕居家玩偶感的中性白保护，避免白色区域被 HSL 色相染红或出现色块。"],
+  ["v3.9", "修复粉棕居家玩偶感在白色高光区域出现发红、涂抹和色块的问题。"],
 ];
 
 presetSelect.addEventListener("change", () => {
@@ -1517,51 +1508,67 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
     const pixel = i / 4;
     const x = pixel % source.width;
     const y = Math.floor(pixel / source.width);
+
     const originalR = data[i] / 255;
     const originalG = data[i + 1] / 255;
     const originalB = data[i + 2] / 255;
     const originalHsl = rgbToHsl(originalR, originalG, originalB);
     const originalLuma = getLuma(originalR, originalG, originalB);
+
     const neutralMask = preset.neutral_protection?.enabled
       ? getNeutralProtectionMask(originalHsl, originalLuma, preset.neutral_protection)
       : 0;
 
-    let r = originalR * exposureFactor * base.red_multiplier;
-    let g = originalG * exposureFactor * base.green_multiplier;
-    let b = originalB * exposureFactor * base.blue_multiplier;
+    const colorAmount = amount * (1 - neutralMask);
+    const neutralAmount = amount * mix(
+      preset.neutral_protection?.softStrength || 0.22,
+      preset.neutral_protection?.minStrength || 0.04,
+      smoothstep(0.72, 0.94, originalLuma),
+    );
+    const localAmount = mix(amount, neutralAmount, neutralMask);
+
+    const neutralRMultiplier = mix(base.red_multiplier, 1, neutralMask);
+    const neutralGMultiplier = mix(base.green_multiplier, 1, neutralMask);
+    const neutralBMultiplier = mix(base.blue_multiplier, 1, neutralMask);
+
+    let r = originalR * exposureFactor * neutralRMultiplier;
+    let g = originalG * exposureFactor * neutralGMultiplier;
+    let b = originalB * exposureFactor * neutralBMultiplier;
 
     let hsl = rgbToHsl(r, g, b);
 
-    for (const color of preset.selective_colors || []) {
-      const mask = hueRangeMask(hsl.h, color.hue_range[0], color.hue_range[1]);
-      if (mask <= 0) continue;
+    if (neutralMask < 0.98) {
+      for (const color of preset.selective_colors || []) {
+        const mask = hueRangeMask(hsl.h, color.hue_range[0], color.hue_range[1]) * (1 - neutralMask);
+        if (mask <= 0) continue;
 
-      hsl.s *= mix(1, color.saturation_multiplier, mask);
-      hsl.l = clamp01(hsl.l + color.lightness_shift * mask);
-      hsl.h = normalizeHue(hsl.h + color.hue_shift * mask);
+        hsl.s *= mix(1, color.saturation_multiplier, mask);
+        hsl.l = clamp01(hsl.l + color.lightness_shift * mask);
+        hsl.h = normalizeHue(hsl.h + color.hue_shift * mask);
+      }
     }
 
-    hsl.s *= base.saturation_factor;
+    hsl.s *= mix(base.saturation_factor, 1, neutralMask);
     [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
 
     const shadowLift = preset.shadow_handling?.lift || 0;
-    const blackLift = base.black_lift + shadowLift + blackLiftBoost;
+    const blackLift = (base.black_lift + shadowLift + blackLiftBoost) * (1 - neutralMask * 0.8);
     r = r * (1 - blackLift) + blackLift;
     g = g * (1 - blackLift) + blackLift;
     b = b * (1 - blackLift) + blackLift;
 
-    r = (r - 0.5) * base.contrast_factor + 0.5;
-    g = (g - 0.5) * base.contrast_factor + 0.5;
-    b = (b - 0.5) * base.contrast_factor + 0.5;
+    r = (r - 0.5) * mix(base.contrast_factor, 1, neutralMask * 0.55) + 0.5;
+    g = (g - 0.5) * mix(base.contrast_factor, 1, neutralMask * 0.55) + 0.5;
+    b = (b - 0.5) * mix(base.contrast_factor, 1, neutralMask * 0.55) + 0.5;
 
-    const gammaPower = 1 / Math.max(0.01, base.gamma);
+    const gammaPower = 1 / Math.max(0.01, mix(base.gamma, 1, neutralMask));
     r = Math.pow(clamp01(r), gammaPower);
     g = Math.pow(clamp01(g), gammaPower);
     b = Math.pow(clamp01(b), gammaPower);
 
-    r = applyToneCurve(r, preset.tone_curve);
-    g = applyToneCurve(g, preset.tone_curve);
-    b = applyToneCurve(b, preset.tone_curve);
+    r = mix(applyToneCurve(r, preset.tone_curve), r, neutralMask * 0.75);
+    g = mix(applyToneCurve(g, preset.tone_curve), g, neutralMask * 0.75);
+    b = mix(applyToneCurve(b, preset.tone_curve), b, neutralMask * 0.75);
 
     if (highlightProtection?.enabled) {
       r = protectHighlight(r, highlightProtection);
@@ -1573,16 +1580,15 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
       [r, g, b] = applyLumaGuard(originalR, originalG, originalB, r, g, b, preset.luma_guard);
     }
 
-    if (preset.shadow_depth?.enabled) {
-      [r, g, b] = applyShadowDepth(originalR, originalG, originalB, r, g, b, preset.shadow_depth);
+    if (preset.shadow_depth?.enabled && neutralMask < 0.9) {
+      [r, g, b] = applyShadowDepth(originalR, originalG, originalB, r, g, b, preset.shadow_depth, colorAmount);
     }
 
-    const localAmount = amount * mix(1, mix(preset.neutral_protection?.softStrength || 0.38, preset.neutral_protection?.minStrength || 0.12, smoothstep(0.72, 0.94, originalLuma)), neutralMask);
     r = mix(originalR, r, localAmount);
     g = mix(originalG, g, localAmount);
     b = mix(originalB, b, localAmount);
 
-    const dither = (deterministicDither(x, y) / 255) * localAmount * (1 - neutralMask);
+    const dither = (deterministicDither(x, y) / 255) * colorAmount;
     data[i] = toByte(r + dither);
     data[i + 1] = toByte(g + dither);
     data[i + 2] = toByte(b + dither);
@@ -1709,18 +1715,20 @@ function getLuma(r, g, b) {
 }
 
 function getNeutralProtectionMask(originalHsl, originalLuma, config) {
-  const lowSaturationMask = 1 - smoothstep(0.045, config.saturationEnd, originalHsl.s);
+  const lowSaturationMask = 1 - smoothstep(0.035, config.saturationEnd, originalHsl.s);
   const lightMask = smoothstep(config.lumaStart, 0.92, originalLuma);
   return lowSaturationMask * lightMask;
 }
 
-function applyShadowDepth(originalR, originalG, originalB, r, g, b, config) {
+function applyShadowDepth(originalR, originalG, originalB, r, g, b, config, strength = 1) {
   const originalLuma = getLuma(originalR, originalG, originalB);
   const targetHsl = rgbToHsl(r, g, b);
   const shadowMask = 1 - smoothstep(0.18, config.start, originalLuma);
   const deepShadowMask = 1 - smoothstep(0.04, 0.20, originalLuma);
   const highlightMask = smoothstep(config.protectHighlightStart, 1, originalLuma);
-  const depth = (config.amount * shadowMask + config.deepAmount * deepShadowMask) * (1 - highlightMask);
+  const depth = (config.amount * shadowMask + config.deepAmount * deepShadowMask) *
+    (1 - highlightMask) *
+    clamp01(strength);
 
   targetHsl.l = clamp01(targetHsl.l - depth);
   return hslToRgb(targetHsl.h, targetHsl.s, targetHsl.l);
