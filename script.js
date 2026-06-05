@@ -90,7 +90,7 @@ const COLOR_PRESETS = {
     },
   },
   pink_brown_home_kawaii: {
-    name: "绮夋灞呭鐜╁伓鎰?,
+    name: "粉棕居家玩偶感",
     mode: "config",
     base: {
       exposure_factor: 1.015,
@@ -1897,6 +1897,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     });
   });
 }
+
 
 
 
