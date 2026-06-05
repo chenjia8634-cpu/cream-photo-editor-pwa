@@ -29,7 +29,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.9";
+const APP_VERSION = "v3.10";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -90,67 +90,46 @@ const COLOR_PRESETS = {
     },
   },
   pink_brown_home_kawaii: {
-  name: "粉棕居家玩偶感",
-  mode: "config",
-  adaptive: {
-    targetMedian: 0.50,
-    targetP95: 0.88,
-    targetP99: 0.94,
-    maxBrighten: 1.045,
-    maxDarken: 0.985,
+    name: "绮夋灞呭鐜╁伓鎰?,
+    mode: "config",
+    base: {
+      exposure_factor: 1.015,
+      red_multiplier: 1.004,
+      green_multiplier: 1.000,
+      blue_multiplier: 0.994,
+      black_lift: 0.003,
+      contrast_factor: 1.018,
+      saturation_factor: 1.01,
+      gamma: 1.004,
+    },
+    tone_curve: [
+      [0.00, 0.004],
+      [0.25, 0.252],
+      [0.50, 0.506],
+      [0.75, 0.750],
+      [0.90, 0.870],
+      [1.00, 0.965],
+    ],
+    selective_colors: [
+      { hue_range: [345, 15], saturation_multiplier: 1.006, lightness_shift: 0.000, hue_shift: 0 },
+      { hue_range: [15, 42], saturation_multiplier: 1.012, lightness_shift: 0.000, hue_shift: -1 },
+      { hue_range: [42, 78], saturation_multiplier: 1.006, lightness_shift: 0.000, hue_shift: -1 },
+      { hue_range: [78, 165], saturation_multiplier: 0.94, lightness_shift: 0.000, hue_shift: -3 },
+      { hue_range: [165, 205], saturation_multiplier: 0.94, lightness_shift: 0.000, hue_shift: -2 },
+      { hue_range: [205, 252], saturation_multiplier: 0.98, lightness_shift: 0.000, hue_shift: 1 },
+      { hue_range: [252, 300], saturation_multiplier: 0.98, lightness_shift: 0.000, hue_shift: 1 },
+      { hue_range: [300, 345], saturation_multiplier: 1.012, lightness_shift: 0.000, hue_shift: 1 },
+    ],
+    highlight_protection: {
+      enabled: true,
+      start: 0.84,
+      compression: 0.72,
+    },
+    shadow_handling: {
+      lift: 0.004,
+      softness: 0.24,
+    },
   },
-  base: {
-    exposure_factor: 1.006,
-    red_multiplier: 1.004,
-    green_multiplier: 1.000,
-    blue_multiplier: 0.996,
-    black_lift: 0.003,
-    contrast_factor: 1.018,
-    saturation_factor: 1.018,
-    gamma: 1.006,
-  },
-  tone_curve: [
-    [0.00, 0.004],
-    [0.18, 0.172],
-    [0.50, 0.505],
-    [0.75, 0.752],
-    [0.90, 0.872],
-    [1.00, 0.965],
-  ],
-  selective_colors: [
-    { hue_range: [345, 15], saturation_multiplier: 1.015, lightness_shift: 0.002, hue_shift: 0 },
-    { hue_range: [15, 42], saturation_multiplier: 1.025, lightness_shift: 0.001, hue_shift: -1 },
-    { hue_range: [42, 78], saturation_multiplier: 1.018, lightness_shift: 0.000, hue_shift: -2 },
-    { hue_range: [78, 165], saturation_multiplier: 0.92, lightness_shift: -0.001, hue_shift: -4 },
-    { hue_range: [165, 205], saturation_multiplier: 0.90, lightness_shift: -0.001, hue_shift: -3 },
-    { hue_range: [205, 252], saturation_multiplier: 0.98, lightness_shift: 0.000, hue_shift: 1 },
-    { hue_range: [252, 300], saturation_multiplier: 0.96, lightness_shift: 0.000, hue_shift: 1 },
-    { hue_range: [300, 345], saturation_multiplier: 1.035, lightness_shift: 0.002, hue_shift: 1 },
-  ],
-  highlight_protection: {
-    enabled: true,
-    start: 0.82,
-    compression: 0.66,
-  },
-  shadow_handling: {
-    lift: 0.004,
-    softness: 0.26,
-  },
-  neutral_protection: {
-    enabled: true,
-    lumaStart: 0.45,
-    saturationEnd: 0.22,
-    minStrength: 0.04,
-    softStrength: 0.22,
-  },
-  shadow_depth: {
-    enabled: true,
-    start: 0.52,
-    amount: 0.018,
-    deepAmount: 0.008,
-    protectHighlightStart: 0.78,
-  },
-},
 };
 
 const CHANGELOG = [
@@ -1508,67 +1487,35 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
     const pixel = i / 4;
     const x = pixel % source.width;
     const y = Math.floor(pixel / source.width);
-
     const originalR = data[i] / 255;
     const originalG = data[i + 1] / 255;
     const originalB = data[i + 2] / 255;
-    const originalHsl = rgbToHsl(originalR, originalG, originalB);
-    const originalLuma = getLuma(originalR, originalG, originalB);
 
-    const neutralMask = preset.neutral_protection?.enabled
-      ? getNeutralProtectionMask(originalHsl, originalLuma, preset.neutral_protection)
-      : 0;
-
-    const colorAmount = amount * (1 - neutralMask);
-    const neutralAmount = amount * mix(
-      preset.neutral_protection?.softStrength || 0.22,
-      preset.neutral_protection?.minStrength || 0.04,
-      smoothstep(0.72, 0.94, originalLuma),
-    );
-    const localAmount = mix(amount, neutralAmount, neutralMask);
-
-    const neutralRMultiplier = mix(base.red_multiplier, 1, neutralMask);
-    const neutralGMultiplier = mix(base.green_multiplier, 1, neutralMask);
-    const neutralBMultiplier = mix(base.blue_multiplier, 1, neutralMask);
-
-    let r = originalR * exposureFactor * neutralRMultiplier;
-    let g = originalG * exposureFactor * neutralGMultiplier;
-    let b = originalB * exposureFactor * neutralBMultiplier;
+    let r = originalR * exposureFactor * base.red_multiplier;
+    let g = originalG * exposureFactor * base.green_multiplier;
+    let b = originalB * exposureFactor * base.blue_multiplier;
 
     let hsl = rgbToHsl(r, g, b);
 
-    if (neutralMask < 0.98) {
-      for (const color of preset.selective_colors || []) {
-        const mask = hueRangeMask(hsl.h, color.hue_range[0], color.hue_range[1]) * (1 - neutralMask);
-        if (mask <= 0) continue;
-
-        hsl.s *= mix(1, color.saturation_multiplier, mask);
-        hsl.l = clamp01(hsl.l + color.lightness_shift * mask);
-        hsl.h = normalizeHue(hsl.h + color.hue_shift * mask);
-      }
+    for (const color of preset.selective_colors || []) {
+      const mask = hueRangeMask(hsl.h, color.hue_range[0], color.hue_range[1]);
+      if (mask <= 0) continue;
+      hsl.s *= mix(1, color.saturation_multiplier, mask);
+      hsl.l = clamp01(hsl.l + color.lightness_shift * mask);
+      hsl.h = normalizeHue(hsl.h + color.hue_shift * mask);
     }
 
-    hsl.s *= mix(base.saturation_factor, 1, neutralMask);
+    hsl.s *= base.saturation_factor;
     [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
 
-    const shadowLift = preset.shadow_handling?.lift || 0;
-    const blackLift = (base.black_lift + shadowLift + blackLiftBoost) * (1 - neutralMask * 0.8);
+    const blackLift = base.black_lift + (preset.shadow_handling?.lift || 0) + blackLiftBoost;
     r = r * (1 - blackLift) + blackLift;
     g = g * (1 - blackLift) + blackLift;
     b = b * (1 - blackLift) + blackLift;
 
-    r = (r - 0.5) * mix(base.contrast_factor, 1, neutralMask * 0.55) + 0.5;
-    g = (g - 0.5) * mix(base.contrast_factor, 1, neutralMask * 0.55) + 0.5;
-    b = (b - 0.5) * mix(base.contrast_factor, 1, neutralMask * 0.55) + 0.5;
-
-    const gammaPower = 1 / Math.max(0.01, mix(base.gamma, 1, neutralMask));
-    r = Math.pow(clamp01(r), gammaPower);
-    g = Math.pow(clamp01(g), gammaPower);
-    b = Math.pow(clamp01(b), gammaPower);
-
-    r = mix(applyToneCurve(r, preset.tone_curve), r, neutralMask * 0.75);
-    g = mix(applyToneCurve(g, preset.tone_curve), g, neutralMask * 0.75);
-    b = mix(applyToneCurve(b, preset.tone_curve), b, neutralMask * 0.75);
+    r = applyToneCurve(Math.pow(clamp01((r - 0.5) * base.contrast_factor + 0.5), 1 / Math.max(0.01, base.gamma)), preset.tone_curve);
+    g = applyToneCurve(Math.pow(clamp01((g - 0.5) * base.contrast_factor + 0.5), 1 / Math.max(0.01, base.gamma)), preset.tone_curve);
+    b = applyToneCurve(Math.pow(clamp01((b - 0.5) * base.contrast_factor + 0.5), 1 / Math.max(0.01, base.gamma)), preset.tone_curve);
 
     if (highlightProtection?.enabled) {
       r = protectHighlight(r, highlightProtection);
@@ -1576,22 +1523,9 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
       b = protectHighlight(b, highlightProtection);
     }
 
-    if (preset.luma_guard?.enabled) {
-      [r, g, b] = applyLumaGuard(originalR, originalG, originalB, r, g, b, preset.luma_guard);
-    }
-
-    if (preset.shadow_depth?.enabled && neutralMask < 0.9) {
-      [r, g, b] = applyShadowDepth(originalR, originalG, originalB, r, g, b, preset.shadow_depth, colorAmount);
-    }
-
-    r = mix(originalR, r, localAmount);
-    g = mix(originalG, g, localAmount);
-    b = mix(originalB, b, localAmount);
-
-    const dither = (deterministicDither(x, y) / 255) * colorAmount;
-    data[i] = toByte(r + dither);
-    data[i + 1] = toByte(g + dither);
-    data[i + 2] = toByte(b + dither);
+    data[i] = toByte(mix(originalR, r, amount) + (deterministicDither(x, y) / 255) * amount);
+    data[i + 1] = toByte(mix(originalG, g, amount) + (deterministicDither(x, y) / 255) * amount);
+    data[i + 2] = toByte(mix(originalB, b, amount) + (deterministicDither(x, y) / 255) * amount);
   }
 
   targetContext.putImageData(imageData, 0, 0);
@@ -1712,26 +1646,6 @@ function shiftRgbToLuma(r, g, b, targetLuma) {
 
 function getLuma(r, g, b) {
   return clamp01(r * 0.299 + g * 0.587 + b * 0.114);
-}
-
-function getNeutralProtectionMask(originalHsl, originalLuma, config) {
-  const lowSaturationMask = 1 - smoothstep(0.035, config.saturationEnd, originalHsl.s);
-  const lightMask = smoothstep(config.lumaStart, 0.92, originalLuma);
-  return lowSaturationMask * lightMask;
-}
-
-function applyShadowDepth(originalR, originalG, originalB, r, g, b, config, strength = 1) {
-  const originalLuma = getLuma(originalR, originalG, originalB);
-  const targetHsl = rgbToHsl(r, g, b);
-  const shadowMask = 1 - smoothstep(0.18, config.start, originalLuma);
-  const deepShadowMask = 1 - smoothstep(0.04, 0.20, originalLuma);
-  const highlightMask = smoothstep(config.protectHighlightStart, 1, originalLuma);
-  const depth = (config.amount * shadowMask + config.deepAmount * deepShadowMask) *
-    (1 - highlightMask) *
-    clamp01(strength);
-
-  targetHsl.l = clamp01(targetHsl.l - depth);
-  return hslToRgb(targetHsl.h, targetHsl.s, targetHsl.l);
 }
 
 function applyToneCurve(value, points) {
@@ -1983,6 +1897,7 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     });
   });
 }
+
 
 
 
