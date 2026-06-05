@@ -26,7 +26,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.2";
+const APP_VERSION = "v3.3";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -50,22 +50,22 @@ const COLOR_PRESETS = {
     name: "暖棕清透轻调",
     mode: "config",
     base: {
-      exposure_factor: 1.02,
-      red_multiplier: 1.018,
+      exposure_factor: 0.975,
+      red_multiplier: 1.014,
       green_multiplier: 1.000,
-      blue_multiplier: 0.982,
-      black_lift: 0.008,
-      contrast_factor: 1.035,
-      saturation_factor: 1.02,
-      gamma: 1.015,
+      blue_multiplier: 0.986,
+      black_lift: 0.004,
+      contrast_factor: 1.02,
+      saturation_factor: 1.015,
+      gamma: 0.985,
     },
     tone_curve: [
       [0.00, 0.008],
       [0.25, 0.265],
-      [0.50, 0.515],
-      [0.75, 0.758],
-      [0.90, 0.890],
-      [1.00, 0.980],
+      [0.50, 0.500],
+      [0.75, 0.735],
+      [0.90, 0.850],
+      [1.00, 0.955],
     ],
     selective_colors: [
       { hue_range: [345, 15], saturation_multiplier: 1.02, lightness_shift: 0.004, hue_shift: 1 },
@@ -78,8 +78,8 @@ const COLOR_PRESETS = {
     ],
     highlight_protection: {
       enabled: true,
-      start: 0.84,
-      compression: 0.62,
+      start: 0.76,
+      compression: 0.52,
     },
     shadow_handling: {
       lift: 0.010,
@@ -107,6 +107,7 @@ const CHANGELOG = [
   ["v3.0", "增加调色风格选择，并新增奶油暖白玩偶感预设。"],
   ["v3.1", "将新增风格调整为暖棕清透轻调，更克制地保留木质暖棕和日常清透感。"],
   ["v3.2", "微调暖棕清透轻调，降低曝光并加强高光保护，减少过曝感。"],
+  ["v3.3", "继续降低暖棕清透轻调 EV，并更强压住白色高光区域。"],
 ];
 
 presetSelect.addEventListener("change", () => {
