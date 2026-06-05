@@ -329,6 +329,41 @@ h2 {
   display: block;
 }
 
+.preview-nav {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: grid;
+  gap: 8px;
+  transform: translateY(-50%);
+  z-index: 3;
+}
+
+.preview-nav-button {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(137, 105, 69, 0.2);
+  border-radius: 999px;
+  color: #7a6047;
+  background: rgba(246, 232, 211, 0.88);
+  box-shadow: 0 8px 18px rgba(92, 70, 49, 0.16);
+  font-size: 28px;
+  font-weight: 760;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+  backdrop-filter: blur(8px);
+}
+
+.preview-nav-button:active {
+  transform: scale(0.94);
+}
+
+.preview-nav-button:disabled {
+  display: none;
+}
+
 .preview-canvas {
   display: none;
 }

@@ -20,13 +20,15 @@ const strengthValue = document.querySelector("#strengthValue");
 const compareButton = document.querySelector("#compareButton");
 const reprocessButton = document.querySelector("#reprocessButton");
 const currentIndexBadge = document.querySelector("#currentIndexBadge");
+const prevItemButton = document.querySelector("#prevItemButton");
+const nextItemButton = document.querySelector("#nextItemButton");
 const changelogButton = document.querySelector("#changelogButton");
 const changelogDialog = document.querySelector("#changelogDialog");
 const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.5";
+const APP_VERSION = "v3.6";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -90,39 +92,39 @@ const COLOR_PRESETS = {
     name: "粉棕居家玩偶感",
     mode: "config",
     adaptive: {
-      targetMedian: 0.52,
-      targetP95: 0.88,
+      targetMedian: 0.48,
+      targetP95: 0.87,
       targetP99: 0.94,
-      maxBrighten: 1.08,
+      maxBrighten: 1.055,
       maxDarken: 0.98,
     },
     base: {
-      exposure_factor: 1.015,
-      red_multiplier: 1.018,
-      green_multiplier: 1.002,
-      blue_multiplier: 0.982,
-      black_lift: 0.006,
-      contrast_factor: 0.985,
-      saturation_factor: 1.018,
-      gamma: 1.025,
+      exposure_factor: 1.005,
+      red_multiplier: 1.016,
+      green_multiplier: 1.000,
+      blue_multiplier: 0.986,
+      black_lift: 0.004,
+      contrast_factor: 1.028,
+      saturation_factor: 1.042,
+      gamma: 1.008,
     },
     tone_curve: [
-      [0.00, 0.006],
-      [0.18, 0.190],
-      [0.50, 0.515],
-      [0.75, 0.758],
-      [0.90, 0.875],
-      [1.00, 0.960],
+      [0.00, 0.004],
+      [0.18, 0.170],
+      [0.50, 0.505],
+      [0.75, 0.750],
+      [0.90, 0.868],
+      [1.00, 0.958],
     ],
     selective_colors: [
       { hue_range: [345, 15], saturation_multiplier: 1.025, lightness_shift: 0.004, hue_shift: 1 },
-      { hue_range: [15, 42], saturation_multiplier: 1.035, lightness_shift: 0.006, hue_shift: -1 },
-      { hue_range: [42, 78], saturation_multiplier: 1.025, lightness_shift: 0.004, hue_shift: -3 },
-      { hue_range: [78, 165], saturation_multiplier: 0.84, lightness_shift: 0.000, hue_shift: -6 },
-      { hue_range: [165, 205], saturation_multiplier: 0.82, lightness_shift: 0.000, hue_shift: -4 },
-      { hue_range: [205, 252], saturation_multiplier: 0.88, lightness_shift: 0.002, hue_shift: 3 },
+      { hue_range: [15, 42], saturation_multiplier: 1.055, lightness_shift: 0.002, hue_shift: -1 },
+      { hue_range: [42, 78], saturation_multiplier: 1.045, lightness_shift: 0.000, hue_shift: -3 },
+      { hue_range: [78, 165], saturation_multiplier: 0.90, lightness_shift: -0.002, hue_shift: -5 },
+      { hue_range: [165, 205], saturation_multiplier: 0.88, lightness_shift: -0.002, hue_shift: -3 },
+      { hue_range: [205, 252], saturation_multiplier: 0.96, lightness_shift: 0.000, hue_shift: 2 },
       { hue_range: [252, 300], saturation_multiplier: 0.94, lightness_shift: 0.002, hue_shift: 3 },
-      { hue_range: [300, 345], saturation_multiplier: 1.075, lightness_shift: 0.006, hue_shift: 2 },
+      { hue_range: [300, 345], saturation_multiplier: 1.09, lightness_shift: 0.004, hue_shift: 2 },
     ],
     highlight_protection: {
       enabled: true,
@@ -142,6 +144,15 @@ const COLOR_PRESETS = {
       minHighlightRatio: 0.88,
       maxHighlightLuma: 0.925,
       maxHighlightRise: 0.018,
+    },
+    color_depth_guard: {
+      enabled: true,
+      minSaturationRatio: 0.90,
+      vividSaturationRatio: 0.96,
+      shadowStart: 0.58,
+      shadowDepth: 0.036,
+      deepShadowDepth: 0.018,
+      highlightProtectStart: 0.80,
     },
   },
 };
@@ -168,6 +179,7 @@ const CHANGELOG = [
   ["v3.3", "继续降低暖棕清透轻调 EV，并更强压住白色高光区域。"],
   ["v3.4", "新增粉棕居家玩偶感预设，按图片亮度自适应降低 EV、稳住暗部并保护白色高光。"],
   ["v3.5", "重做粉棕居家玩偶感的自适应算法，加入亮度保护护栏，避免整图发黑并保留白色层次。"],
+  ["v3.6", "增加预览上一张/下一张快捷按钮，并按参考图统计重调粉棕居家玩偶感，减少发灰、增强暗部对比和颜色保留。"],
 ];
 
 presetSelect.addEventListener("change", () => {
@@ -184,6 +196,14 @@ strengthSlider.addEventListener("input", () => {
 reprocessButton.addEventListener("click", async () => {
   if (!selectedItem || selectedItem.kind !== "image") return;
   await reprocessSelectedImage();
+});
+
+prevItemButton.addEventListener("click", () => {
+  selectAdjacentBatchItem(-1);
+});
+
+nextItemButton.addEventListener("click", () => {
+  selectAdjacentBatchItem(1);
 });
 
 saveSelectedButton.addEventListener("click", async () => {
@@ -715,6 +735,7 @@ function selectBatchItem(item, article) {
     compareButton.disabled = true;
     reprocessButton.disabled = true;
     compareButton.textContent = "按住看原图";
+    updatePreviewNavButtons();
     return;
   }
 
@@ -728,6 +749,27 @@ function selectBatchItem(item, article) {
   compareButton.disabled = !item.sourcePreviewUrl;
   reprocessButton.disabled = !item.sourceFile;
   compareButton.textContent = "按住看原图";
+  updatePreviewNavButtons();
+}
+
+function selectAdjacentBatchItem(direction) {
+  if (!selectedItem || batchItems.length < 2) return;
+  const currentIndex = batchItems.indexOf(selectedItem);
+  if (currentIndex < 0) return;
+
+  const nextIndex = currentIndex + direction;
+  if (nextIndex < 0 || nextIndex >= batchItems.length) return;
+
+  const nextItem = batchItems[nextIndex];
+  selectBatchItem(nextItem, nextItem.element);
+}
+
+function updatePreviewNavButtons() {
+  const currentIndex = selectedItem ? batchItems.indexOf(selectedItem) : -1;
+  const hasMultiple = batchItems.length > 1 && currentIndex >= 0;
+
+  prevItemButton.disabled = !hasMultiple || currentIndex <= 0;
+  nextItemButton.disabled = !hasMultiple || currentIndex >= batchItems.length - 1;
 }
 
 function showOriginalCompare() {
@@ -1456,6 +1498,10 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
       [r, g, b] = applyLumaGuard(originalR, originalG, originalB, r, g, b, preset.luma_guard);
     }
 
+    if (preset.color_depth_guard?.enabled) {
+      [r, g, b] = applyColorDepthGuard(originalR, originalG, originalB, r, g, b, preset.color_depth_guard);
+    }
+
     r = mix(originalR, r, amount);
     g = mix(originalG, g, amount);
     b = mix(originalB, b, amount);
@@ -1584,6 +1630,26 @@ function shiftRgbToLuma(r, g, b, targetLuma) {
 
 function getLuma(r, g, b) {
   return clamp01(r * 0.299 + g * 0.587 + b * 0.114);
+}
+
+function applyColorDepthGuard(originalR, originalG, originalB, r, g, b, config) {
+  const originalLuma = getLuma(originalR, originalG, originalB);
+  const originalHsl = rgbToHsl(originalR, originalG, originalB);
+  const targetHsl = rgbToHsl(r, g, b);
+  const vividMask = smoothstep(0.14, 0.34, originalHsl.s);
+  const preserveRatio = mix(config.minSaturationRatio, config.vividSaturationRatio, vividMask);
+
+  if (originalHsl.s > 0.055) {
+    targetHsl.s = Math.max(targetHsl.s, originalHsl.s * preserveRatio);
+  }
+
+  const shadowMask = 1 - smoothstep(0.20, config.shadowStart, originalLuma);
+  const deepShadowMask = 1 - smoothstep(0.04, 0.22, originalLuma);
+  const highlightMask = smoothstep(config.highlightProtectStart, 1, originalLuma);
+  const depth = (config.shadowDepth * shadowMask + config.deepShadowDepth * deepShadowMask) * (1 - highlightMask);
+
+  targetHsl.l = clamp01(targetHsl.l - depth);
+  return hslToRgb(targetHsl.h, targetHsl.s, targetHsl.l);
 }
 
 function applyToneCurve(value, points) {
@@ -1767,6 +1833,8 @@ function resetOutput() {
   reprocessButton.classList.remove("is-processing");
   reprocessButton.textContent = "重新用当前强度处理";
   currentIndexBadge.textContent = "未选择";
+  prevItemButton.disabled = true;
+  nextItemButton.disabled = true;
   compareButton.textContent = "按住看原图";
   sourceCard.classList.remove("has-image");
   resultCard.classList.remove("has-image");
