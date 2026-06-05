@@ -29,7 +29,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.7";
+const APP_VERSION = "v3.8";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -101,9 +101,9 @@ const COLOR_PRESETS = {
     },
     base: {
       exposure_factor: 1.005,
-      red_multiplier: 1.016,
+      red_multiplier: 1.008,
       green_multiplier: 1.000,
-      blue_multiplier: 0.986,
+      blue_multiplier: 0.992,
       black_lift: 0.004,
       contrast_factor: 1.028,
       saturation_factor: 1.042,
@@ -146,21 +146,19 @@ const COLOR_PRESETS = {
       maxHighlightLuma: 0.925,
       maxHighlightRise: 0.018,
     },
-    color_depth_guard: {
+    neutral_protection: {
       enabled: true,
-      minSaturationRatio: 0.90,
-      vividSaturationRatio: 0.96,
-      shadowStart: 0.58,
-      shadowDepth: 0.036,
-      deepShadowDepth: 0.018,
-      highlightProtectStart: 0.80,
+      lumaStart: 0.48,
+      saturationEnd: 0.24,
+      minStrength: 0.12,
+      softStrength: 0.38,
     },
-    neutral_white_guard: {
+    shadow_depth: {
       enabled: true,
-      lumaStart: 0.54,
-      saturationEnd: 0.18,
-      maxSaturation: 0.045,
-      maxWarmShift: 0.018,
+      start: 0.55,
+      amount: 0.026,
+      deepAmount: 0.012,
+      protectHighlightStart: 0.78,
     },
   },
 };
@@ -189,6 +187,7 @@ const CHANGELOG = [
   ["v3.5", "重做粉棕居家玩偶感的自适应算法，加入亮度保护护栏，避免整图发黑并保留白色层次。"],
   ["v3.6", "增加预览上一张/下一张快捷按钮，并按参考图统计重调粉棕居家玩偶感，减少发灰、增强暗部对比和颜色保留。"],
   ["v3.7", "修复中性白色区域偏红和预览块状感，翻页按钮移到序号旁，并增加应用到全部照片功能。"],
+  ["v3.8", "重做粉棕居家玩偶感的中性白保护，避免白色区域被 HSL 色相染红或出现色块。"],
 ];
 
 presetSelect.addEventListener("change", () => {
@@ -1521,6 +1520,11 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
     const originalR = data[i] / 255;
     const originalG = data[i + 1] / 255;
     const originalB = data[i + 2] / 255;
+    const originalHsl = rgbToHsl(originalR, originalG, originalB);
+    const originalLuma = getLuma(originalR, originalG, originalB);
+    const neutralMask = preset.neutral_protection?.enabled
+      ? getNeutralProtectionMask(originalHsl, originalLuma, preset.neutral_protection)
+      : 0;
 
     let r = originalR * exposureFactor * base.red_multiplier;
     let g = originalG * exposureFactor * base.green_multiplier;
@@ -1569,19 +1573,16 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
       [r, g, b] = applyLumaGuard(originalR, originalG, originalB, r, g, b, preset.luma_guard);
     }
 
-    if (preset.color_depth_guard?.enabled) {
-      [r, g, b] = applyColorDepthGuard(originalR, originalG, originalB, r, g, b, preset.color_depth_guard);
+    if (preset.shadow_depth?.enabled) {
+      [r, g, b] = applyShadowDepth(originalR, originalG, originalB, r, g, b, preset.shadow_depth);
     }
 
-    if (preset.neutral_white_guard?.enabled) {
-      [r, g, b] = applyNeutralWhiteGuard(originalR, originalG, originalB, r, g, b, preset.neutral_white_guard);
-    }
+    const localAmount = amount * mix(1, mix(preset.neutral_protection?.softStrength || 0.38, preset.neutral_protection?.minStrength || 0.12, smoothstep(0.72, 0.94, originalLuma)), neutralMask);
+    r = mix(originalR, r, localAmount);
+    g = mix(originalG, g, localAmount);
+    b = mix(originalB, b, localAmount);
 
-    r = mix(originalR, r, amount);
-    g = mix(originalG, g, amount);
-    b = mix(originalB, b, amount);
-
-    const dither = (deterministicDither(x, y) / 255) * amount;
+    const dither = (deterministicDither(x, y) / 255) * localAmount * (1 - neutralMask);
     data[i] = toByte(r + dither);
     data[i + 1] = toByte(g + dither);
     data[i + 2] = toByte(b + dither);
@@ -1707,56 +1708,22 @@ function getLuma(r, g, b) {
   return clamp01(r * 0.299 + g * 0.587 + b * 0.114);
 }
 
-function applyColorDepthGuard(originalR, originalG, originalB, r, g, b, config) {
+function getNeutralProtectionMask(originalHsl, originalLuma, config) {
+  const lowSaturationMask = 1 - smoothstep(0.045, config.saturationEnd, originalHsl.s);
+  const lightMask = smoothstep(config.lumaStart, 0.92, originalLuma);
+  return lowSaturationMask * lightMask;
+}
+
+function applyShadowDepth(originalR, originalG, originalB, r, g, b, config) {
   const originalLuma = getLuma(originalR, originalG, originalB);
-  const originalHsl = rgbToHsl(originalR, originalG, originalB);
   const targetHsl = rgbToHsl(r, g, b);
-  const vividMask = smoothstep(0.14, 0.34, originalHsl.s);
-  const preserveRatio = mix(config.minSaturationRatio, config.vividSaturationRatio, vividMask);
-
-  if (originalHsl.s > 0.055) {
-    targetHsl.s = Math.max(targetHsl.s, originalHsl.s * preserveRatio);
-  }
-
-  const shadowMask = 1 - smoothstep(0.20, config.shadowStart, originalLuma);
-  const deepShadowMask = 1 - smoothstep(0.04, 0.22, originalLuma);
-  const highlightMask = smoothstep(config.highlightProtectStart, 1, originalLuma);
-  const depth = (config.shadowDepth * shadowMask + config.deepShadowDepth * deepShadowMask) * (1 - highlightMask);
+  const shadowMask = 1 - smoothstep(0.18, config.start, originalLuma);
+  const deepShadowMask = 1 - smoothstep(0.04, 0.20, originalLuma);
+  const highlightMask = smoothstep(config.protectHighlightStart, 1, originalLuma);
+  const depth = (config.amount * shadowMask + config.deepAmount * deepShadowMask) * (1 - highlightMask);
 
   targetHsl.l = clamp01(targetHsl.l - depth);
   return hslToRgb(targetHsl.h, targetHsl.s, targetHsl.l);
-}
-
-function applyNeutralWhiteGuard(originalR, originalG, originalB, r, g, b, config) {
-  const originalHsl = rgbToHsl(originalR, originalG, originalB);
-  const originalLuma = getLuma(originalR, originalG, originalB);
-  const neutralMask = (1 - smoothstep(0.035, config.saturationEnd, originalHsl.s)) *
-    smoothstep(config.lumaStart, 0.92, originalLuma);
-
-  if (neutralMask <= 0) return [r, g, b];
-
-  const targetHsl = rgbToHsl(r, g, b);
-  const maxSaturation = mix(targetHsl.s, Math.max(config.maxSaturation, originalHsl.s * 1.08), neutralMask);
-  const guardedSaturation = Math.min(targetHsl.s, maxSaturation);
-  const guardedHue = mixHue(targetHsl.h, originalHsl.h, neutralMask);
-  let [nr, ng, nb] = hslToRgb(guardedHue, guardedSaturation, targetHsl.l);
-
-  const originalWarm = originalR - originalB;
-  const targetWarm = nr - nb;
-  const maxWarm = originalWarm + config.maxWarmShift;
-
-  if (targetWarm > maxWarm) {
-    const correction = (targetWarm - maxWarm) * neutralMask * 0.5;
-    nr = clamp01(nr - correction);
-    nb = clamp01(nb + correction);
-  }
-
-  return [nr, ng, nb];
-}
-
-function mixHue(fromHue, toHue, amount) {
-  const delta = ((toHue - fromHue + 540) % 360) - 180;
-  return normalizeHue(fromHue + delta * clamp01(amount));
 }
 
 function applyToneCurve(value, points) {
