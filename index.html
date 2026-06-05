@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="奶油调色">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>奶油感产品图自动调色工具 v3.6</title>
+    <title>奶油感产品图自动调色工具 v3.7</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
   </head>
@@ -15,7 +15,7 @@
     <main class="app-shell">
       <header class="app-header">
         <p class="eyebrow">本地浏览器处理 · 不上传照片</p>
-        <h1>奶油感产品图自动调色工具 <span class="version-badge">v3.6</span></h1>
+        <h1>奶油感产品图自动调色工具 <span class="version-badge">v3.7</span></h1>
         <button id="changelogButton" class="text-link-button" type="button">更新日志</button>
       </header>
 
@@ -45,8 +45,9 @@
         <input id="strengthSlider" class="strength-slider" type="range" min="0" max="100" step="5" value="100">
         <div class="control-actions">
           <button id="reprocessButton" class="small-action-button" type="button" disabled>重新用当前强度处理</button>
+          <button id="applyAllButton" class="small-action-button" type="button" disabled>应用到全部照片</button>
         </div>
-        <p class="control-hint">调完强度后，可点按钮重新生成当前图片。</p>
+        <p class="control-hint">调完强度或色调后，可重新生成当前图片，也可以应用到全部照片。</p>
       </section>
 
       <section id="statusPanel" class="status-panel" aria-live="polite">
@@ -61,16 +62,18 @@
 
         <article class="preview-card">
           <div class="preview-head">
-            <h2>调色后 <span id="currentIndexBadge" class="current-index-badge">未选择</span></h2>
+            <h2>
+              调色后 <span id="currentIndexBadge" class="current-index-badge">未选择</span>
+              <span class="preview-nav" aria-label="快速切换预览">
+                <button id="prevItemButton" class="preview-nav-button" type="button" disabled aria-label="上一张">‹</button>
+                <button id="nextItemButton" class="preview-nav-button" type="button" disabled aria-label="下一张">›</button>
+              </span>
+            </h2>
             <button id="compareButton" class="compare-button" type="button" disabled>按住看原图</button>
           </div>
           <img id="resultPreview" class="preview-image" alt="调色后预览">
           <canvas id="resultCanvas" class="preview-canvas" aria-label="调色后预览"></canvas>
           <video id="videoPreview" class="preview-video" controls playsinline muted></video>
-          <div class="preview-nav" aria-label="快速切换预览">
-            <button id="prevItemButton" class="preview-nav-button" type="button" disabled aria-label="上一张">‹</button>
-            <button id="nextItemButton" class="preview-nav-button" type="button" disabled aria-label="下一张">›</button>
-          </div>
           <div id="resultEmpty" class="empty-state">自动生成预览</div>
         </article>
       </section>

@@ -19,6 +19,7 @@ const strengthSlider = document.querySelector("#strengthSlider");
 const strengthValue = document.querySelector("#strengthValue");
 const compareButton = document.querySelector("#compareButton");
 const reprocessButton = document.querySelector("#reprocessButton");
+const applyAllButton = document.querySelector("#applyAllButton");
 const currentIndexBadge = document.querySelector("#currentIndexBadge");
 const prevItemButton = document.querySelector("#prevItemButton");
 const nextItemButton = document.querySelector("#nextItemButton");
@@ -28,7 +29,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.6";
+const APP_VERSION = "v3.7";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -154,6 +155,13 @@ const COLOR_PRESETS = {
       deepShadowDepth: 0.018,
       highlightProtectStart: 0.80,
     },
+    neutral_white_guard: {
+      enabled: true,
+      lumaStart: 0.54,
+      saturationEnd: 0.18,
+      maxSaturation: 0.045,
+      maxWarmShift: 0.018,
+    },
   },
 };
 
@@ -180,6 +188,7 @@ const CHANGELOG = [
   ["v3.4", "新增粉棕居家玩偶感预设，按图片亮度自适应降低 EV、稳住暗部并保护白色高光。"],
   ["v3.5", "重做粉棕居家玩偶感的自适应算法，加入亮度保护护栏，避免整图发黑并保留白色层次。"],
   ["v3.6", "增加预览上一张/下一张快捷按钮，并按参考图统计重调粉棕居家玩偶感，减少发灰、增强暗部对比和颜色保留。"],
+  ["v3.7", "修复中性白色区域偏红和预览块状感，翻页按钮移到序号旁，并增加应用到全部照片功能。"],
 ];
 
 presetSelect.addEventListener("change", () => {
@@ -196,6 +205,10 @@ strengthSlider.addEventListener("input", () => {
 reprocessButton.addEventListener("click", async () => {
   if (!selectedItem || selectedItem.kind !== "image") return;
   await reprocessSelectedImage();
+});
+
+applyAllButton.addEventListener("click", async () => {
+  await applyCurrentSettingsToAllImages();
 });
 
 prevItemButton.addEventListener("click", () => {
@@ -279,6 +292,7 @@ input.addEventListener("change", async (event) => {
   if (successCount > 0) {
     saveButton.disabled = false;
     saveAllButton.disabled = false;
+    updateApplyAllButton();
     const totalSize = batchItems.reduce((sum, item) => sum + item.blob.size, 0);
     setStatus(`批量调色完成：成功 ${successCount} / ${files.length} 个，输出合计 ${formatBytes(totalSize)}。照片只在浏览器本地处理。`);
   } else {
@@ -734,6 +748,7 @@ function selectBatchItem(item, article) {
     videoPreview.preload = "metadata";
     compareButton.disabled = true;
     reprocessButton.disabled = true;
+    updateApplyAllButton();
     compareButton.textContent = "按住看原图";
     updatePreviewNavButtons();
     return;
@@ -748,6 +763,7 @@ function selectBatchItem(item, article) {
   resultPreview.src = item.previewUrl;
   compareButton.disabled = !item.sourcePreviewUrl;
   reprocessButton.disabled = !item.sourceFile;
+  updateApplyAllButton();
   compareButton.textContent = "按住看原图";
   updatePreviewNavButtons();
 }
@@ -770,6 +786,10 @@ function updatePreviewNavButtons() {
 
   prevItemButton.disabled = !hasMultiple || currentIndex <= 0;
   nextItemButton.disabled = !hasMultiple || currentIndex >= batchItems.length - 1;
+}
+
+function updateApplyAllButton() {
+  applyAllButton.disabled = !batchItems.some((item) => item.kind === "image" && item.sourceFile);
 }
 
 function showOriginalCompare() {
@@ -795,6 +815,7 @@ async function reprocessSelectedImage() {
   if (!item || item.kind !== "image" || !item.sourceFile) return;
 
   reprocessButton.disabled = true;
+  applyAllButton.disabled = true;
   reprocessButton.classList.add("is-processing");
   reprocessButton.textContent = "正在重新处理...";
   saveButton.disabled = true;
@@ -802,33 +823,7 @@ async function reprocessSelectedImage() {
   await wait(60);
 
   try {
-    const bitmap = await decodeImage(item.sourceFile);
-    const size = fitSize(bitmap.width, bitmap.height, MAX_EXPORT_EDGE);
-    drawSource(bitmap, size.width, size.height);
-
-    applyCreamPreset(sourceCanvas, resultCanvas, presetStrength);
-    await updatePreviewImage(resultCanvas, resultPreview, "result");
-
-    const blob = await canvasToBlob(resultCanvas, "image/jpeg", JPEG_QUALITY);
-    const nextUrl = URL.createObjectURL(blob);
-    const nextPreviewUrl = await createPreviewUrl(resultCanvas);
-
-    URL.revokeObjectURL(item.url);
-    if (item.previewUrl !== item.url) URL.revokeObjectURL(item.previewUrl);
-
-    item.blob = blob;
-    item.url = nextUrl;
-    item.previewUrl = nextPreviewUrl;
-    item.outputSize = blob.size;
-    item.outputWidth = size.width;
-    item.outputHeight = size.height;
-
-    if (item.thumbElement) item.thumbElement.src = nextPreviewUrl;
-    if (item.infoElement) item.infoElement.textContent = getBatchItemInfoText(item);
-
-    downloadLink.href = item.url;
-    downloadLink.download = item.name;
-    resultPreview.src = item.previewUrl;
+    await updateImageItemWithCurrentSettings(item);
     setStatus(`第 ${item.index} 张已按 ${strengthSlider.value}% 强度重新处理。`);
   } catch (error) {
     console.error(error);
@@ -838,6 +833,82 @@ async function reprocessSelectedImage() {
     reprocessButton.classList.remove("is-processing");
     reprocessButton.textContent = "重新用当前强度处理";
     reprocessButton.disabled = false;
+    updateApplyAllButton();
+  }
+}
+
+async function applyCurrentSettingsToAllImages() {
+  const imageItems = batchItems.filter((item) => item.kind === "image" && item.sourceFile);
+  if (!imageItems.length) return;
+
+  const originalSelected = selectedItem;
+  applyAllButton.disabled = true;
+  reprocessButton.disabled = true;
+  saveButton.disabled = true;
+  saveAllButton.disabled = true;
+  applyAllButton.classList.add("is-processing");
+  applyAllButton.textContent = "正在应用到全部...";
+  await wait(60);
+
+  let successCount = 0;
+
+  try {
+    for (let index = 0; index < imageItems.length; index += 1) {
+      const item = imageItems[index];
+      setStatus(`正在应用到全部照片：${index + 1} / ${imageItems.length}，第 ${item.index} 张`);
+      await updateImageItemWithCurrentSettings(item, { updatePreview: item === originalSelected });
+      successCount += 1;
+      await wait(20);
+    }
+
+    if (originalSelected && batchItems.includes(originalSelected)) {
+      selectBatchItem(originalSelected, originalSelected.element);
+    }
+
+    const totalSize = batchItems.reduce((sum, item) => sum + item.blob.size, 0);
+    setStatus(`已用当前色调和 ${strengthSlider.value}% 强度应用到 ${successCount} 张照片。输出合计 ${formatBytes(totalSize)}。`);
+  } catch (error) {
+    console.error(error);
+    setStatus(error.message || "应用到全部照片失败，请再试一次。");
+  } finally {
+    applyAllButton.classList.remove("is-processing");
+    applyAllButton.textContent = "应用到全部照片";
+    saveButton.disabled = !selectedItem;
+    saveAllButton.disabled = !batchItems.length;
+    reprocessButton.disabled = !(selectedItem?.kind === "image" && selectedItem.sourceFile);
+    updateApplyAllButton();
+  }
+}
+
+async function updateImageItemWithCurrentSettings(item, options = {}) {
+  const bitmap = await decodeImage(item.sourceFile);
+  const size = fitSize(bitmap.width, bitmap.height, MAX_EXPORT_EDGE);
+  drawSource(bitmap, size.width, size.height);
+
+  applyCreamPreset(sourceCanvas, resultCanvas, presetStrength);
+
+  const blob = await canvasToBlob(resultCanvas, "image/jpeg", JPEG_QUALITY);
+  const nextUrl = URL.createObjectURL(blob);
+  const nextPreviewUrl = await createPreviewUrl(resultCanvas);
+
+  URL.revokeObjectURL(item.url);
+  if (item.previewUrl !== item.url) URL.revokeObjectURL(item.previewUrl);
+
+  item.blob = blob;
+  item.url = nextUrl;
+  item.previewUrl = nextPreviewUrl;
+  item.outputSize = blob.size;
+  item.outputWidth = size.width;
+  item.outputHeight = size.height;
+
+  if (item.thumbElement) item.thumbElement.src = nextPreviewUrl;
+  if (item.infoElement) item.infoElement.textContent = getBatchItemInfoText(item);
+
+  if (options.updatePreview !== false && item === selectedItem) {
+    downloadLink.href = item.url;
+    downloadLink.download = item.name;
+    resultPreview.src = item.previewUrl;
+    sourcePreview.src = item.sourcePreviewUrl || "";
   }
 }
 
@@ -1502,6 +1573,10 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
       [r, g, b] = applyColorDepthGuard(originalR, originalG, originalB, r, g, b, preset.color_depth_guard);
     }
 
+    if (preset.neutral_white_guard?.enabled) {
+      [r, g, b] = applyNeutralWhiteGuard(originalR, originalG, originalB, r, g, b, preset.neutral_white_guard);
+    }
+
     r = mix(originalR, r, amount);
     g = mix(originalG, g, amount);
     b = mix(originalB, b, amount);
@@ -1650,6 +1725,38 @@ function applyColorDepthGuard(originalR, originalG, originalB, r, g, b, config) 
 
   targetHsl.l = clamp01(targetHsl.l - depth);
   return hslToRgb(targetHsl.h, targetHsl.s, targetHsl.l);
+}
+
+function applyNeutralWhiteGuard(originalR, originalG, originalB, r, g, b, config) {
+  const originalHsl = rgbToHsl(originalR, originalG, originalB);
+  const originalLuma = getLuma(originalR, originalG, originalB);
+  const neutralMask = (1 - smoothstep(0.035, config.saturationEnd, originalHsl.s)) *
+    smoothstep(config.lumaStart, 0.92, originalLuma);
+
+  if (neutralMask <= 0) return [r, g, b];
+
+  const targetHsl = rgbToHsl(r, g, b);
+  const maxSaturation = mix(targetHsl.s, Math.max(config.maxSaturation, originalHsl.s * 1.08), neutralMask);
+  const guardedSaturation = Math.min(targetHsl.s, maxSaturation);
+  const guardedHue = mixHue(targetHsl.h, originalHsl.h, neutralMask);
+  let [nr, ng, nb] = hslToRgb(guardedHue, guardedSaturation, targetHsl.l);
+
+  const originalWarm = originalR - originalB;
+  const targetWarm = nr - nb;
+  const maxWarm = originalWarm + config.maxWarmShift;
+
+  if (targetWarm > maxWarm) {
+    const correction = (targetWarm - maxWarm) * neutralMask * 0.5;
+    nr = clamp01(nr - correction);
+    nb = clamp01(nb + correction);
+  }
+
+  return [nr, ng, nb];
+}
+
+function mixHue(fromHue, toHue, amount) {
+  const delta = ((toHue - fromHue + 540) % 360) - 180;
+  return normalizeHue(fromHue + delta * clamp01(amount));
 }
 
 function applyToneCurve(value, points) {
@@ -1806,7 +1913,7 @@ async function createPreviewUrl(canvas) {
   context.imageSmoothingQuality = "high";
   context.drawImage(canvas, 0, 0, previewSize.width, previewSize.height);
 
-  const blob = await canvasToBlob(previewCanvas, "image/jpeg", 0.9);
+  const blob = await canvasToBlob(previewCanvas, "image/jpeg", 0.96);
   return URL.createObjectURL(blob);
 }
 
@@ -1832,6 +1939,9 @@ function resetOutput() {
   reprocessButton.disabled = true;
   reprocessButton.classList.remove("is-processing");
   reprocessButton.textContent = "重新用当前强度处理";
+  applyAllButton.disabled = true;
+  applyAllButton.classList.remove("is-processing");
+  applyAllButton.textContent = "应用到全部照片";
   currentIndexBadge.textContent = "未选择";
   prevItemButton.disabled = true;
   nextItemButton.disabled = true;

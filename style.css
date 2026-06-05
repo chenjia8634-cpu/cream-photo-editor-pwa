@@ -278,6 +278,12 @@ h2 {
   border-bottom: 1px solid var(--line);
 }
 
+.preview-head h2 {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .compare-button {
   flex: 0 0 auto;
   min-height: 34px;
@@ -330,30 +336,25 @@ h2 {
 }
 
 .preview-nav {
-  position: absolute;
-  top: 50%;
-  right: 10px;
-  display: grid;
-  gap: 8px;
-  transform: translateY(-50%);
-  z-index: 3;
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 .preview-nav-button {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(137, 105, 69, 0.2);
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(137, 105, 69, 0.22);
   border-radius: 999px;
   color: #7a6047;
-  background: rgba(246, 232, 211, 0.88);
-  box-shadow: 0 8px 18px rgba(92, 70, 49, 0.16);
-  font-size: 28px;
+  background: #f5e6d1;
+  font-size: 21px;
   font-weight: 760;
   line-height: 1;
   -webkit-tap-highlight-color: transparent;
-  backdrop-filter: blur(8px);
 }
 
 .preview-nav-button:active {
