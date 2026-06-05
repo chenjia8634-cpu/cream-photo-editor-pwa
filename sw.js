@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = "cream-photo-editor-v30";
+const CACHE_NAME = "cream-photo-editor-v31";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -37,5 +37,3 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
-
-

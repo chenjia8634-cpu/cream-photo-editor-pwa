@@ -29,7 +29,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.10";
+const APP_VERSION = "v3.11";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -130,6 +130,50 @@ const COLOR_PRESETS = {
       softness: 0.24,
     },
   },
+  universal_food: {
+    name: "万能美食调色",
+    mode: "config",
+    base: {
+      exposure_factor: 1.15,
+      red_multiplier: 1.015,
+      green_multiplier: 1.003,
+      blue_multiplier: 0.985,
+      black_lift: 0.006,
+      contrast_factor: 1.05,
+      saturation_factor: 1.12,
+      gamma: 0.965,
+    },
+    tone_curve: [
+      [0.00, 0.000],
+      [0.20, 0.225],
+      [0.50, 0.535],
+      [0.75, 0.758],
+      [0.90, 0.855],
+      [1.00, 0.955],
+    ],
+    selective_colors: [
+      { hue_range: [345, 15], saturation_multiplier: 1.08, lightness_shift: 0.000, hue_shift: 0 },
+      { hue_range: [15, 45], saturation_multiplier: 1.12, lightness_shift: 0.004, hue_shift: -1 },
+      { hue_range: [45, 85], saturation_multiplier: 1.10, lightness_shift: 0.003, hue_shift: -1 },
+      { hue_range: [85, 165], saturation_multiplier: 1.03, lightness_shift: 0.002, hue_shift: -2 },
+      { hue_range: [165, 210], saturation_multiplier: 0.98, lightness_shift: 0.000, hue_shift: -1 },
+      { hue_range: [210, 255], saturation_multiplier: 0.96, lightness_shift: 0.000, hue_shift: 1 },
+      { hue_range: [255, 305], saturation_multiplier: 0.98, lightness_shift: 0.000, hue_shift: 0 },
+      { hue_range: [305, 345], saturation_multiplier: 1.04, lightness_shift: 0.000, hue_shift: 0 },
+    ],
+    highlight_protection: {
+      enabled: true,
+      start: 0.78,
+      compression: 0.50,
+    },
+    shadow_handling: {
+      lift: 0.008,
+      softness: 0.30,
+    },
+    sharpening: {
+      amount: 0.20,
+    },
+  },
 };
 
 const CHANGELOG = [
@@ -159,6 +203,7 @@ const CHANGELOG = [
   ["v3.8", "重做粉棕居家玩偶感的中性白保护，避免白色区域被 HSL 色相染红或出现色块。"],
   ["v3.9", "修复粉棕居家玩偶感在白色高光区域出现发红、涂抹和色块的问题。"],
   ["v3.10", "将粉棕居家玩偶感改为稳定连续算法，移除局部中性保护和暗部遮罩，减少白色区域发红、涂抹和色块。"],
+  ["v3.11", "新增万能美食调色预设，按曝光、鲜明度、高光、阴影、饱和、色温、锐度和清晰度参数做本地调色。"],
 ];
 
 presetSelect.addEventListener("change", () => {
@@ -1529,7 +1574,37 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
     data[i + 2] = toByte(mix(originalB, b, amount) + (deterministicDither(x, y) / 255) * amount);
   }
 
+  if (preset.sharpening?.amount) {
+    applySubtleSharpen(imageData, source.width, source.height, preset.sharpening.amount * amount);
+  }
+
   targetContext.putImageData(imageData, 0, 0);
+}
+
+function applySubtleSharpen(imageData, width, height, amount) {
+  const strength = clampRange(amount, 0, 0.5);
+  if (strength <= 0.001 || width < 3 || height < 3) return;
+
+  const data = imageData.data;
+  const source = new Uint8ClampedArray(data);
+
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const index = (y * width + x) * 4;
+
+      for (let channel = 0; channel < 3; channel += 1) {
+        const center = source[index + channel];
+        const sharpened =
+          center * 5 -
+          source[index - 4 + channel] -
+          source[index + 4 + channel] -
+          source[index - width * 4 + channel] -
+          source[index + width * 4 + channel];
+
+        data[index + channel] = toByte((center + (sharpened - center) * strength) / 255);
+      }
+    }
+  }
 }
 
 function analyzeImageStats(data) {
@@ -1898,7 +1973,5 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     });
   });
 }
-
-
 
 
