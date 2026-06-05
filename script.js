@@ -9,6 +9,7 @@ const resultCard = resultCanvas.closest(".preview-card");
 const statusText = document.querySelector("#statusText");
 const saveButton = document.querySelector("#saveButton");
 const saveAllButton = document.querySelector("#saveAllButton");
+const saveSelectedButton = document.querySelector("#saveSelectedButton");
 const downloadLink = document.querySelector("#downloadLink");
 const batchSection = document.querySelector("#batchSection");
 const batchResults = document.querySelector("#batchResults");
@@ -18,10 +19,13 @@ const strengthValue = document.querySelector("#strengthValue");
 const compareButton = document.querySelector("#compareButton");
 const reprocessButton = document.querySelector("#reprocessButton");
 const currentIndexBadge = document.querySelector("#currentIndexBadge");
+const changelogButton = document.querySelector("#changelogButton");
+const changelogDialog = document.querySelector("#changelogDialog");
+const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v2.8";
+const APP_VERSION = "v2.9";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -35,6 +39,24 @@ let presetStrength = 1;
 let ffmpegInstance = null;
 let ffmpegHelpers = null;
 
+const CHANGELOG = [
+  ["v1.0", "完成首版 MVP，支持 JPG/PNG 上传、Canvas 本地调色、原图/调色后预览和 JPG 保存。"],
+  ["v1.1", "提升导出质量，减少 JPG 压缩导致的马赛克和画质损失。"],
+  ["v1.2", "修复手机端预览空白但可以下载的问题。"],
+  ["v1.3", "增加 HEIC/HEIF 本地转码，iPhone 相册照片可直接导入调色。"],
+  ["v1.4", "增加批量导入、批量调色和批量保存。"],
+  ["v2.0", "尝试支持 Live Photo 转视频后的 MOV/MP4 视频调色。"],
+  ["v2.1", "优化视频导出预览、首帧和音频保留方向，并给标题增加版本号。"],
+  ["v2.2", "增加视频引擎下载进度提示。"],
+  ["v2.3", "增加视频引擎初始化等待提示和超时提示。"],
+  ["v2.4", "调整视频方案，避免 iPhone 端 ffmpeg 初始化长期卡住。"],
+  ["v2.5", "恢复 iPhone 视频兼容导出，增加调色强度滑杆、按住原图对比、批量结果点选预览。"],
+  ["v2.6", "精简预览区，只保留调色后预览框，原图改为按住按钮临时查看。"],
+  ["v2.7", "修复 iPhone 长按原图对比按钮触发文字选取的问题。"],
+  ["v2.8", "增加当前强度重新处理按钮，批量缩略图和当前预览显示对应序号。"],
+  ["v2.9", "增加重新处理即时反馈、更新日志弹窗、多选保存，并让单项下载走系统保存弹窗。"],
+];
+
 strengthSlider.addEventListener("input", () => {
   presetStrength = Number(strengthSlider.value) / 100;
   strengthValue.textContent = `${strengthSlider.value}%`;
@@ -43,6 +65,20 @@ strengthSlider.addEventListener("input", () => {
 reprocessButton.addEventListener("click", async () => {
   if (!selectedItem || selectedItem.kind !== "image") return;
   await reprocessSelectedImage();
+});
+
+saveSelectedButton.addEventListener("click", async () => {
+  const selectedItems = batchItems.filter((item) => item.selected);
+  if (!selectedItems.length) return;
+  await saveBatchItems(selectedItems);
+});
+
+changelogButton.addEventListener("click", () => {
+  openChangelog();
+});
+
+changelogDialog.addEventListener("click", (event) => {
+  if (event.target.closest("[data-close-modal]")) closeChangelog();
 });
 
 compareButton.addEventListener("pointerdown", (event) => {
@@ -118,25 +154,7 @@ saveButton.addEventListener("click", async () => {
 
 saveAllButton.addEventListener("click", async () => {
   if (!batchItems.length) return;
-
-    const files = batchItems.map((item) => new File([item.blob], item.name, { type: item.type }));
-
-  if (navigator.canShare && navigator.share && navigator.canShare({ files })) {
-    try {
-      await navigator.share({
-        files,
-        title: "濂舵补鎰熶骇鍝佸浘",
-      });
-      return;
-    } catch (error) {
-      if (error && error.name === "AbortError") return;
-    }
-  }
-
-  for (const item of batchItems) {
-    triggerDownload(item);
-    await wait(350);
-  }
+  await saveBatchItems(batchItems);
 });
 
 async function processFile(file, index, total) {
@@ -191,7 +209,7 @@ async function processVideoFile(file, index, total) {
     return await processVideoFileCompat(file, index, total);
   }
 
-  setStatus(`姝ｅ湪鍔犺浇楂樿川閲忚棰戝紩鎿庯紝棣栨浣跨敤浼氱◢鎱?..`);
+  setStatus("正在加载高质量视频引擎，首次使用会稍慢...");
 
   const [metadata, posterUrl, ffmpeg] = await Promise.all([
     readVideoMetadata(file),
@@ -248,7 +266,7 @@ async function processVideoFile(file, index, total) {
     ]);
   }
 
-  setStatus(`姝ｅ湪鐢熸垚璋冭壊鍚庤棰戯細${file.name}`);
+  setStatus(`正在生成调色后视频：${file.name}`);
   const data = await ffmpeg.readFile(outputFsName);
   const blob = new Blob([data.buffer], { type: "video/mp4" });
   const url = URL.createObjectURL(blob);
@@ -469,6 +487,7 @@ function stopStreamTracks(stream) {
 
 function addBatchItem(item) {
   item.index = batchItems.length + 1;
+  item.selected = false;
   batchItems.push(item);
   batchSection.classList.add("has-results");
   batchCount.textContent = `${batchItems.length} 张`;
@@ -485,7 +504,7 @@ function addBatchItem(item) {
     image.controls = true;
     image.playsInline = true;
   } else {
-    image.alt = `${item.originalName} 璋冭壊棰勮`;
+    image.alt = `${item.originalName} 调色预览`;
   }
 
   const thumbWrap = document.createElement("div");
@@ -494,7 +513,23 @@ function addBatchItem(item) {
   const indexBadge = document.createElement("span");
   indexBadge.className = "thumb-index";
   indexBadge.textContent = String(item.index);
-  thumbWrap.append(image, indexBadge);
+
+  const selectLabel = document.createElement("label");
+  selectLabel.className = "item-select";
+  selectLabel.setAttribute("aria-label", `选择第 ${item.index} 张`);
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+  checkbox.addEventListener("change", () => {
+    item.selected = checkbox.checked;
+    updateSelectedSaveState();
+  });
+
+  selectLabel.append(checkbox);
+  thumbWrap.append(image, indexBadge, selectLabel);
 
   const meta = document.createElement("div");
   meta.className = "batch-meta";
@@ -512,10 +547,16 @@ function addBatchItem(item) {
   link.href = item.url;
   link.download = item.name;
   link.textContent = "下载";
+  link.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    await saveBatchItem(item);
+  });
 
   item.element = article;
   item.thumbElement = image;
   item.infoElement = info;
+  item.checkboxElement = checkbox;
 
   meta.append(name, info, link);
   article.append(thumbWrap, meta);
@@ -593,39 +634,50 @@ async function reprocessSelectedImage() {
   if (!item || item.kind !== "image" || !item.sourceFile) return;
 
   reprocessButton.disabled = true;
+  reprocessButton.classList.add("is-processing");
+  reprocessButton.textContent = "正在重新处理...";
   saveButton.disabled = true;
-  setStatus(`姝ｅ湪鐢ㄥ綋鍓嶅己搴﹂噸鏂板鐞嗙 ${item.index} 寮狅細${item.originalName}`);
+  setStatus(`正在用 ${strengthSlider.value}% 强度重新处理第 ${item.index} 张：${item.originalName}`);
+  await wait(60);
 
-  const bitmap = await decodeImage(item.sourceFile);
-  const size = fitSize(bitmap.width, bitmap.height, MAX_EXPORT_EDGE);
-  drawSource(bitmap, size.width, size.height);
+  try {
+    const bitmap = await decodeImage(item.sourceFile);
+    const size = fitSize(bitmap.width, bitmap.height, MAX_EXPORT_EDGE);
+    drawSource(bitmap, size.width, size.height);
 
-  applyCreamPreset(sourceCanvas, resultCanvas, presetStrength);
-  await updatePreviewImage(resultCanvas, resultPreview, "result");
+    applyCreamPreset(sourceCanvas, resultCanvas, presetStrength);
+    await updatePreviewImage(resultCanvas, resultPreview, "result");
 
-  const blob = await canvasToBlob(resultCanvas, "image/jpeg", JPEG_QUALITY);
-  const nextUrl = URL.createObjectURL(blob);
-  const nextPreviewUrl = await createPreviewUrl(resultCanvas);
+    const blob = await canvasToBlob(resultCanvas, "image/jpeg", JPEG_QUALITY);
+    const nextUrl = URL.createObjectURL(blob);
+    const nextPreviewUrl = await createPreviewUrl(resultCanvas);
 
-  URL.revokeObjectURL(item.url);
-  if (item.previewUrl !== item.url) URL.revokeObjectURL(item.previewUrl);
+    URL.revokeObjectURL(item.url);
+    if (item.previewUrl !== item.url) URL.revokeObjectURL(item.previewUrl);
 
-  item.blob = blob;
-  item.url = nextUrl;
-  item.previewUrl = nextPreviewUrl;
-  item.outputSize = blob.size;
-  item.outputWidth = size.width;
-  item.outputHeight = size.height;
+    item.blob = blob;
+    item.url = nextUrl;
+    item.previewUrl = nextPreviewUrl;
+    item.outputSize = blob.size;
+    item.outputWidth = size.width;
+    item.outputHeight = size.height;
 
-  if (item.thumbElement) item.thumbElement.src = nextPreviewUrl;
-  if (item.infoElement) item.infoElement.textContent = getBatchItemInfoText(item);
+    if (item.thumbElement) item.thumbElement.src = nextPreviewUrl;
+    if (item.infoElement) item.infoElement.textContent = getBatchItemInfoText(item);
 
-  downloadLink.href = item.url;
-  downloadLink.download = item.name;
-  resultPreview.src = item.previewUrl;
-  saveButton.disabled = false;
-  reprocessButton.disabled = false;
-  setStatus(`第 ${item.index} 张已按 ${strengthSlider.value}% 强度重新处理。`);
+    downloadLink.href = item.url;
+    downloadLink.download = item.name;
+    resultPreview.src = item.previewUrl;
+    setStatus(`第 ${item.index} 张已按 ${strengthSlider.value}% 强度重新处理。`);
+  } catch (error) {
+    console.error(error);
+    setStatus(error.message || "重新处理失败，请再试一次。");
+  } finally {
+    saveButton.disabled = false;
+    reprocessButton.classList.remove("is-processing");
+    reprocessButton.textContent = "重新用当前强度处理";
+    reprocessButton.disabled = false;
+  }
 }
 
 function addBatchError(fileName, message) {
@@ -655,13 +707,20 @@ function addBatchError(fileName, message) {
 }
 
 async function saveBatchItem(item) {
-  const file = new File([item.blob], item.name, { type: item.type });
+  await saveBatchItems([item]);
+}
 
-  if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+async function saveBatchItems(items) {
+  const validItems = items.filter(Boolean);
+  if (!validItems.length) return;
+
+  const files = validItems.map((item) => new File([item.blob], item.name, { type: item.type }));
+
+  if (navigator.canShare && navigator.share && navigator.canShare({ files })) {
     try {
       await navigator.share({
-        files: [file],
-        title: "濂舵补鎰熶骇鍝佸浘",
+        files,
+        title: "奶油感产品图",
       });
       return;
     } catch (error) {
@@ -669,7 +728,44 @@ async function saveBatchItem(item) {
     }
   }
 
-  triggerDownload(item);
+  for (const item of validItems) {
+    triggerDownload(item);
+    await wait(350);
+  }
+}
+
+function updateSelectedSaveState() {
+  const selectedCount = batchItems.filter((item) => item.selected).length;
+  saveSelectedButton.disabled = selectedCount === 0;
+  saveSelectedButton.textContent = selectedCount > 0 ? `保存已选结果（${selectedCount}）` : "保存已选结果";
+}
+
+function openChangelog() {
+  if (!changelogList.dataset.rendered) {
+    changelogList.textContent = "";
+    for (const [version, text] of CHANGELOG.slice().reverse()) {
+      const item = document.createElement("article");
+      item.className = "changelog-item";
+
+      const title = document.createElement("div");
+      title.className = "changelog-version";
+      title.textContent = version;
+
+      const body = document.createElement("p");
+      body.className = "changelog-text";
+      body.textContent = text;
+
+      item.append(title, body);
+      changelogList.append(item);
+    }
+    changelogList.dataset.rendered = "true";
+  }
+
+  changelogDialog.hidden = false;
+}
+
+function closeChangelog() {
+  changelogDialog.hidden = true;
 }
 
 function triggerDownload(item) {
@@ -1286,9 +1382,13 @@ function canvasToBlob(canvas, type, quality) {
 function resetOutput() {
   saveButton.disabled = true;
   saveAllButton.disabled = true;
+  saveSelectedButton.disabled = true;
+  saveSelectedButton.textContent = "保存已选结果";
   selectedItem = null;
   compareButton.disabled = true;
   reprocessButton.disabled = true;
+  reprocessButton.classList.remove("is-processing");
+  reprocessButton.textContent = "重新用当前强度处理";
   currentIndexBadge.textContent = "未选择";
   compareButton.textContent = "按住看原图";
   sourceCard.classList.remove("has-image");
@@ -1300,7 +1400,7 @@ function resetOutput() {
   videoPreview.removeAttribute("poster");
   batchSection.classList.remove("has-results");
   batchResults.textContent = "";
-  batchCount.textContent = `${batchItems.length} 张`;
+  batchCount.textContent = "0 张";
 
   batchItems.forEach((item) => {
     URL.revokeObjectURL(item.url);
@@ -1349,4 +1449,6 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     });
   });
 }
+
+
 

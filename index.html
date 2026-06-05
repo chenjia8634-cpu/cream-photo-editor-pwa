@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="奶油调色">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>奶油感产品图自动调色工具 v2.8</title>
+    <title>奶油感产品图自动调色工具 v2.9</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
   </head>
@@ -15,7 +15,8 @@
     <main class="app-shell">
       <header class="app-header">
         <p class="eyebrow">本地浏览器处理 · 不上传照片</p>
-        <h1>奶油感产品图自动调色工具 <span class="version-badge">v2.8</span></h1>
+        <h1>奶油感产品图自动调色工具 <span class="version-badge">v2.9</span></h1>
+        <button id="changelogButton" class="text-link-button" type="button">更新日志</button>
       </header>
 
       <section class="panel upload-panel" aria-label="上传照片">
@@ -67,11 +68,13 @@
           <h2>批量结果</h2>
           <span id="batchCount" class="batch-count">0 张</span>
         </div>
+        <p class="batch-hint">勾选多张后，可保存已选结果。</p>
         <div id="batchResults" class="batch-results"></div>
       </section>
 
       <div class="actions">
         <button id="saveButton" class="save-button" type="button" disabled>保存当前结果</button>
+        <button id="saveSelectedButton" class="save-button secondary-button" type="button" disabled>保存已选结果</button>
         <button id="saveAllButton" class="save-button secondary-button" type="button" disabled>保存全部结果</button>
         <a id="downloadLink" class="download-link" download="cream-tone-photo.jpg" hidden>下载图片</a>
       </div>
@@ -81,6 +84,17 @@
         <p>照片和视频只在当前浏览器里读取和调色，不会上传到任何服务器。图片输出为高质量 JPG；iPhone 视频兼容模式会导出调色视频，但通常无法保留原声音。</p>
       </section>
     </main>
+
+    <div id="changelogDialog" class="modal" hidden>
+      <div class="modal-backdrop" data-close-modal></div>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
+        <div class="modal-head">
+          <h2 id="changelogTitle">更新日志</h2>
+          <button class="modal-close" type="button" data-close-modal>关闭</button>
+        </div>
+        <div id="changelogList" class="changelog-list"></div>
+      </section>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" defer></script>
     <script src="script.js" defer></script>
