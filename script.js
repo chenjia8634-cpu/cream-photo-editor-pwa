@@ -29,7 +29,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.13";
+const APP_VERSION = "v3.14";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -132,48 +132,26 @@ const COLOR_PRESETS = {
   },
   universal_food: {
     name: "\u4e07\u80fd\u7f8e\u98df\u8c03\u8272",
-    mode: "config",
+    mode: "food",
     base: {
-      exposure_factor: 1.08,
-      red_multiplier: 1.012,
+      exposure_factor: 1.10,
+      red_multiplier: 1.010,
       green_multiplier: 1.002,
-      blue_multiplier: 0.988,
-      black_lift: 0.001,
-      contrast_factor: 1.055,
-      saturation_factor: 1.10,
+      blue_multiplier: 0.990,
+      contrast_factor: 1.045,
+      saturation_factor: 1.08,
       gamma: 0.985,
     },
-    tone_curve: [
-      [0.00, 0.000],
-      [0.20, 0.205],
-      [0.50, 0.515],
-      [0.75, 0.738],
-      [0.90, 0.825],
-      [1.00, 0.935],
-    ],
-    selective_colors: [
-      { hue_range: [345, 15], saturation_multiplier: 1.07, lightness_shift: 0.000, hue_shift: 0 },
-      { hue_range: [15, 45], saturation_multiplier: 1.10, lightness_shift: 0.001, hue_shift: -1 },
-      { hue_range: [45, 85], saturation_multiplier: 1.08, lightness_shift: 0.000, hue_shift: -1 },
-      { hue_range: [85, 165], saturation_multiplier: 1.01, lightness_shift: 0.000, hue_shift: -2 },
-      { hue_range: [165, 210], saturation_multiplier: 0.98, lightness_shift: 0.000, hue_shift: -1 },
-      { hue_range: [210, 255], saturation_multiplier: 0.96, lightness_shift: 0.000, hue_shift: 1 },
-      { hue_range: [255, 305], saturation_multiplier: 0.98, lightness_shift: 0.000, hue_shift: 0 },
-      { hue_range: [305, 345], saturation_multiplier: 1.03, lightness_shift: 0.000, hue_shift: 0 },
-    ],
     highlight_protection: {
       enabled: true,
-      start: 0.70,
-      compression: 0.36,
-    },
-    shadow_handling: {
-      lift: 0.000,
-      softness: 0.22,
+      start: 0.76,
+      compression: 0.62,
     },
     sharpening: {
-      amount: 0.18,
+      amount: 0.14,
     },
-  },};
+  },
+};
 
 const CHANGELOG = [
   ["v1.0", "完成首版 MVP，支持 JPG/PNG 上传、Canvas 本地调色、原图/调色后预览和 JPG 保存。"],
@@ -198,13 +176,14 @@ const CHANGELOG = [
   ["v3.4", "新增粉棕居家玩偶感预设，按图片亮度自适应降低 EV、稳住暗部并保护白色高光。"],
   ["v3.5", "重做粉棕居家玩偶感的自适应算法，加入亮度保护护栏，避免整图发黑并保留白色层次。"],
   ["v3.6", "增加预览上一张/下一张快捷按钮，并按参考图统计重调粉棕居家玩偶感，减少发灰、增强暗部对比和颜色保留。"],
-  ["v3.7", "修复中性白色区域偏红和预览块状感，翻页按钮移到序号旁，并增加应用到全部照片功能。"],
+  ["v3.7", "修复中性白色区域偏红和预览块状感，翻页按钮移动到序号旁，并增加应用到全部照片功能。"],
   ["v3.8", "重做粉棕居家玩偶感的中性白保护，避免白色区域被 HSL 色相染红或出现色块。"],
   ["v3.9", "修复粉棕居家玩偶感在白色高光区域出现发红、涂抹和色块的问题。"],
   ["v3.10", "将粉棕居家玩偶感改为稳定连续算法，移除局部中性保护和暗部遮罩，减少白色区域发红、涂抹和色块。"],
   ["v3.11", "新增万能美食调色预设，按曝光、鲜明度、高光、阴影、饱和、色温、锐度和清晰度参数做本地调色。"],
   ["v3.12", "优化万能美食调色，降低高光提亮并保留白色细节，减少暗部提亮以增强画面层次。"],
-  ["v3.13", "\u91cd\u505a\u4e07\u80fd\u7f8e\u98df\u8c03\u8272\u7684\u9ad8\u5149\u4fdd\u62a4\u987a\u5e8f\uff0c\u66dd\u5149\u548c\u9971\u548c\u4e3b\u8981\u4f5c\u7528\u4e8e\u4e2d\u95f4\u8c03\uff0c\u6697\u90e8\u4e0d\u989d\u5916\u63d0\u4eae\uff0c\u51cf\u5c11\u53c8\u6697\u53c8\u4e22\u9ad8\u5149\u7ec6\u8282\u7684\u95ee\u9898\u3002"],
+  ["v3.13", "重做万能美食调色的高光保护顺序，曝光和饱和主要作用于中间调，暗部不额外提亮，减少又暗又丢高光细节的问题。"],
+  ["v3.14", "重做万能美食调色为专用算法，中间调提亮，高光先保护，暗部不额外提亮，用自然鲜明度保留食物色彩和细节。"],
 ];
 
 presetSelect.addEventListener("change", () => {
@@ -1237,7 +1216,7 @@ function createVideoFilter(strength) {
   if (amount <= 0.001) return "null";
 
   const preset = COLOR_PRESETS[activePresetId] || COLOR_PRESETS.cream_product;
-  if (preset.mode === "config") {
+  if (preset.mode === "config" || preset.mode === "food") {
     const base = preset.base;
     const brightness = ((base.exposure_factor - 1) * 0.65 * amount).toFixed(4);
     const contrast = (1 + (base.contrast_factor - 1) * amount).toFixed(4);
@@ -1433,6 +1412,11 @@ function drawSource(image, width, height) {
 
 function applyCreamPreset(source, target, strengthAmount = 1) {
   const preset = COLOR_PRESETS[activePresetId] || COLOR_PRESETS.cream_product;
+  if (preset.mode === "food") {
+    applyFoodPreset(source, target, preset, strengthAmount);
+    return;
+  }
+
   if (preset.mode === "config") {
     applyConfigPreset(source, target, preset, strengthAmount);
     return;
@@ -1517,6 +1501,109 @@ function applyCreamPreset(source, target, strengthAmount = 1) {
   targetContext.putImageData(imageData, 0, 0);
 }
 
+function applyFoodPreset(source, target, preset, strengthAmount = 1) {
+  const sourceContext = source.getContext("2d", { willReadFrequently: true });
+  const targetContext = target.getContext("2d", { willReadFrequently: true });
+  const imageData = sourceContext.getImageData(0, 0, source.width, source.height);
+  const data = imageData.data;
+  const amount = clamp01(strengthAmount);
+  const base = preset.base;
+  const highlightProtection = preset.highlight_protection;
+  let sharpenWeightSum = 0;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const pixel = i / 4;
+    const x = pixel % source.width;
+    const y = Math.floor(pixel / source.width);
+    const originalR = data[i] / 255;
+    const originalG = data[i + 1] / 255;
+    const originalB = data[i + 2] / 255;
+    const originalLuma = getLuma(originalR, originalG, originalB);
+    const highlightMask = smoothstep(0.68, 0.96, originalLuma);
+    const strongHighlightMask = smoothstep(0.82, 0.99, originalLuma);
+    const shadowMask = 1 - smoothstep(0.06, 0.32, originalLuma);
+    const midtoneMask = (1 - highlightMask * 0.88) * (1 - shadowMask * 0.62);
+    const foodExposure = 1 + (base.exposure_factor - 1) * amount * midtoneMask;
+    const channelAmount = amount * (1 - strongHighlightMask * 0.78) * (1 - shadowMask * 0.28);
+
+    let r = originalR * foodExposure * mix(1, base.red_multiplier, channelAmount);
+    let g = originalG * foodExposure * mix(1, base.green_multiplier, channelAmount);
+    let b = originalB * foodExposure * mix(1, base.blue_multiplier, channelAmount);
+
+    const contrastAmount = amount * (1 - strongHighlightMask * 0.52) * (1 - shadowMask * 0.18);
+    r = (r - 0.5) * mix(1, base.contrast_factor, contrastAmount) + 0.5;
+    g = (g - 0.5) * mix(1, base.contrast_factor, contrastAmount) + 0.5;
+    b = (b - 0.5) * mix(1, base.contrast_factor, contrastAmount) + 0.5;
+
+    const gammaPower = 1 / Math.max(0.01, mix(1, base.gamma, amount * midtoneMask));
+    r = Math.pow(clamp01(r), gammaPower);
+    g = Math.pow(clamp01(g), gammaPower);
+    b = Math.pow(clamp01(b), gammaPower);
+
+    let hsl = rgbToHsl(r, g, b);
+    const originalHsl = rgbToHsl(originalR, originalG, originalB);
+    const neutralMask = 1 - smoothstep(0.025, 0.16, originalHsl.s);
+    const highSaturationMask = smoothstep(0.42, 0.86, originalHsl.s);
+    const vibranceAmount = amount *
+      (1 - neutralMask * 0.78) *
+      (1 - highSaturationMask * 0.58) *
+      (1 - strongHighlightMask * 0.74) *
+      (1 - shadowMask * 0.25);
+
+    hsl.s *= mix(1, base.saturation_factor, vibranceAmount);
+
+    const warmFoodMask = Math.max(
+      hueRangeMask(hsl.h, 12, 48),
+      hueRangeMask(hsl.h, 48, 82) * 0.82,
+    );
+    const redFoodMask = hueRangeMask(hsl.h, 345, 18);
+    const greenMask = hueRangeMask(hsl.h, 85, 165);
+    const blueMask = hueRangeMask(hsl.h, 205, 255);
+
+    hsl.s *= 1 + warmFoodMask * 0.045 * vibranceAmount;
+    hsl.s *= 1 + redFoodMask * 0.035 * vibranceAmount;
+    hsl.s *= 1 - greenMask * 0.035 * amount;
+    hsl.s *= 1 - blueMask * 0.035 * amount;
+    hsl.h = normalizeHue(hsl.h - warmFoodMask * 1.2 * vibranceAmount);
+
+    [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
+
+    const shoulderAmount = amount * smoothstep(0.72, 1, originalLuma);
+    r = mix(r, protectHighlight(r, highlightProtection), shoulderAmount);
+    g = mix(g, protectHighlight(g, highlightProtection), shoulderAmount);
+    b = mix(b, protectHighlight(b, highlightProtection), shoulderAmount);
+
+    const targetLuma = getLuma(r, g, b);
+    const maxHighlightRise = 0.035 + (1 - strongHighlightMask) * 0.055;
+    const maxLuma = originalLuma + maxHighlightRise * amount * (1 - shadowMask);
+    if (highlightMask > 0 && targetLuma > maxLuma) {
+      [r, g, b] = shiftRgbToLuma(r, g, b, mix(targetLuma, maxLuma, highlightMask));
+    }
+
+    const minShadowLuma = originalLuma - 0.018 * amount;
+    if (shadowMask > 0 && getLuma(r, g, b) < minShadowLuma) {
+      [r, g, b] = shiftRgbToLuma(r, g, b, minShadowLuma);
+    }
+
+    r = mix(originalR, r, amount);
+    g = mix(originalG, g, amount);
+    b = mix(originalB, b, amount);
+
+    const dither = (deterministicDither(x, y) / 255) * amount * (1 - strongHighlightMask * 0.82);
+    data[i] = toByte(r + dither);
+    data[i + 1] = toByte(g + dither);
+    data[i + 2] = toByte(b + dither);
+
+    sharpenWeightSum += amount * (1 - strongHighlightMask * 0.78) * (1 - shadowMask * 0.38);
+  }
+
+  const averageSharpenWeight = sharpenWeightSum / (data.length / 4);
+  if (preset.sharpening?.amount && averageSharpenWeight > 0.001) {
+    applySubtleSharpen(imageData, source.width, source.height, preset.sharpening.amount * averageSharpenWeight);
+  }
+
+  targetContext.putImageData(imageData, 0, 0);
+}
 function applyConfigPreset(source, target, preset, strengthAmount = 1) {
   const sourceContext = source.getContext("2d", { willReadFrequently: true });
   const targetContext = target.getContext("2d", { willReadFrequently: true });
@@ -2012,5 +2099,3 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     });
   });
 }
-
-
