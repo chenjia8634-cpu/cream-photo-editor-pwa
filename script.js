@@ -29,7 +29,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.12";
+const APP_VERSION = "v3.13";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -204,6 +204,7 @@ const CHANGELOG = [
   ["v3.10", "将粉棕居家玩偶感改为稳定连续算法，移除局部中性保护和暗部遮罩，减少白色区域发红、涂抹和色块。"],
   ["v3.11", "新增万能美食调色预设，按曝光、鲜明度、高光、阴影、饱和、色温、锐度和清晰度参数做本地调色。"],
   ["v3.12", "优化万能美食调色，降低高光提亮并保留白色细节，减少暗部提亮以增强画面层次。"],
+  ["v3.13", "\u91cd\u505a\u4e07\u80fd\u7f8e\u98df\u8c03\u8272\u7684\u9ad8\u5149\u4fdd\u62a4\u987a\u5e8f\uff0c\u66dd\u5149\u548c\u9971\u548c\u4e3b\u8981\u4f5c\u7528\u4e8e\u4e2d\u95f4\u8c03\uff0c\u6697\u90e8\u4e0d\u989d\u5916\u63d0\u4eae\uff0c\u51cf\u5c11\u53c8\u6697\u53c8\u4e22\u9ad8\u5149\u7ec6\u8282\u7684\u95ee\u9898\u3002"],
 ];
 
 presetSelect.addEventListener("change", () => {
@@ -1528,6 +1529,9 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
   const exposureFactor = adaptive?.exposureFactor || base.exposure_factor;
   const blackLiftBoost = adaptive?.blackLiftBoost || 0;
   const highlightProtection = adaptive?.highlightProtection || preset.highlight_protection;
+  const tonalProtection = preset.tonal_protection;
+  const sharpenAmount = preset.sharpening?.amount || 0;
+  let sharpenWeightSum = 0;
 
   for (let i = 0; i < data.length; i += 4) {
     const pixel = i / 4;
@@ -1536,32 +1540,55 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
     const originalR = data[i] / 255;
     const originalG = data[i + 1] / 255;
     const originalB = data[i + 2] / 255;
+    const originalLuma = getLuma(originalR, originalG, originalB);
+    const highlightMask = tonalProtection?.enabled
+      ? smoothstep(tonalProtection.highlightStart, tonalProtection.highlightEnd, originalLuma)
+      : 0;
+    const shadowMask = tonalProtection?.enabled
+      ? 1 - smoothstep(0.04, tonalProtection.shadowStart, originalLuma)
+      : 0;
+    const exposureAmount = amount * (1 - highlightMask * (1 - tonalProtection?.minHighlightExposure || 0));
+    const colorAmount = amount *
+      (1 - highlightMask * (1 - (tonalProtection?.minHighlightSaturation || 1))) *
+      (1 - shadowMask * (1 - (tonalProtection?.shadowSaturation || 1)));
+    const localExposureFactor = mix(1, exposureFactor, exposureAmount);
 
-    let r = originalR * exposureFactor * base.red_multiplier;
-    let g = originalG * exposureFactor * base.green_multiplier;
-    let b = originalB * exposureFactor * base.blue_multiplier;
+    let r = originalR * localExposureFactor * mix(1, base.red_multiplier, colorAmount);
+    let g = originalG * localExposureFactor * mix(1, base.green_multiplier, colorAmount);
+    let b = originalB * localExposureFactor * mix(1, base.blue_multiplier, colorAmount);
 
     let hsl = rgbToHsl(r, g, b);
 
     for (const color of preset.selective_colors || []) {
-      const mask = hueRangeMask(hsl.h, color.hue_range[0], color.hue_range[1]);
+      const mask = hueRangeMask(hsl.h, color.hue_range[0], color.hue_range[1]) * colorAmount;
       if (mask <= 0) continue;
       hsl.s *= mix(1, color.saturation_multiplier, mask);
       hsl.l = clamp01(hsl.l + color.lightness_shift * mask);
       hsl.h = normalizeHue(hsl.h + color.hue_shift * mask);
     }
 
-    hsl.s *= base.saturation_factor;
+    hsl.s *= mix(1, base.saturation_factor, colorAmount);
     [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
 
-    const blackLift = base.black_lift + (preset.shadow_handling?.lift || 0) + blackLiftBoost;
+    const shadowLift = (preset.shadow_handling?.lift || 0) * (1 - shadowMask);
+    const blackLift = base.black_lift + shadowLift + blackLiftBoost;
     r = r * (1 - blackLift) + blackLift;
     g = g * (1 - blackLift) + blackLift;
     b = b * (1 - blackLift) + blackLift;
 
-    r = applyToneCurve(Math.pow(clamp01((r - 0.5) * base.contrast_factor + 0.5), 1 / Math.max(0.01, base.gamma)), preset.tone_curve);
-    g = applyToneCurve(Math.pow(clamp01((g - 0.5) * base.contrast_factor + 0.5), 1 / Math.max(0.01, base.gamma)), preset.tone_curve);
-    b = applyToneCurve(Math.pow(clamp01((b - 0.5) * base.contrast_factor + 0.5), 1 / Math.max(0.01, base.gamma)), preset.tone_curve);
+    const contrastAmount = amount * (1 - highlightMask * 0.35);
+    r = (r - 0.5) * mix(1, base.contrast_factor, contrastAmount) + 0.5;
+    g = (g - 0.5) * mix(1, base.contrast_factor, contrastAmount) + 0.5;
+    b = (b - 0.5) * mix(1, base.contrast_factor, contrastAmount) + 0.5;
+
+    const gammaPower = 1 / Math.max(0.01, mix(1, base.gamma, amount * (1 - highlightMask * 0.45)));
+    r = Math.pow(clamp01(r), gammaPower);
+    g = Math.pow(clamp01(g), gammaPower);
+    b = Math.pow(clamp01(b), gammaPower);
+
+    r = mix(r, applyToneCurve(r, preset.tone_curve), amount * (1 - highlightMask * 0.55));
+    g = mix(g, applyToneCurve(g, preset.tone_curve), amount * (1 - highlightMask * 0.55));
+    b = mix(b, applyToneCurve(b, preset.tone_curve), amount * (1 - highlightMask * 0.55));
 
     if (highlightProtection?.enabled) {
       r = protectHighlight(r, highlightProtection);
@@ -1569,18 +1596,30 @@ function applyConfigPreset(source, target, preset, strengthAmount = 1) {
       b = protectHighlight(b, highlightProtection);
     }
 
-    data[i] = toByte(mix(originalR, r, amount) + (deterministicDither(x, y) / 255) * amount);
-    data[i + 1] = toByte(mix(originalG, g, amount) + (deterministicDither(x, y) / 255) * amount);
-    data[i + 2] = toByte(mix(originalB, b, amount) + (deterministicDither(x, y) / 255) * amount);
+    r = mix(originalR, r, amount);
+    g = mix(originalG, g, amount);
+    b = mix(originalB, b, amount);
+
+    const dither = (deterministicDither(x, y) / 255) * amount * (1 - highlightMask * 0.75);
+    data[i] = toByte(r + dither);
+    data[i + 1] = toByte(g + dither);
+    data[i + 2] = toByte(b + dither);
+
+    if (sharpenAmount) {
+      const sharpenWeight = amount *
+        (1 - highlightMask * (1 - (tonalProtection?.minHighlightSharpen || 1))) *
+        (1 - shadowMask * 0.45);
+      sharpenWeightSum += sharpenWeight;
+    }
   }
 
-  if (preset.sharpening?.amount) {
-    applySubtleSharpen(imageData, source.width, source.height, preset.sharpening.amount * amount);
+  if (sharpenAmount && sharpenWeightSum > 0) {
+    const averageSharpenWeight = sharpenWeightSum / (data.length / 4);
+    applySubtleSharpen(imageData, source.width, source.height, sharpenAmount * averageSharpenWeight);
   }
 
   targetContext.putImageData(imageData, 0, 0);
 }
-
 function applySubtleSharpen(imageData, width, height, amount) {
   const strength = clampRange(amount, 0, 0.5);
   if (strength <= 0.001 || width < 3 || height < 3) return;
