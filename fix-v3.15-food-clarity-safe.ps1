@@ -51,6 +51,16 @@ function Add-ReadmeChangelog([string]$Text, [string]$Version, [string]$Message) 
   return $Text.Substring(0, $last.Index + $last.Length) + "`r`n" + $line + $Text.Substring($last.Index + $last.Length)
 }
 
+function Remove-JsChangelog([string]$Text, [string]$Version) {
+  $pattern = '(?m)^  \["' + [regex]::Escape($Version) + '", .*\],\r?\n?'
+  return [regex]::Replace($Text, $pattern, '', 1)
+}
+
+function Remove-ReadmeChangelog([string]$Text, [string]$Version) {
+  $pattern = '(?m)^- `' + [regex]::Escape($Version) + '`.*\r?\n?'
+  return [regex]::Replace($Text, $pattern, '', 1)
+}
+
 function Replace-JsObjectProperty([string]$Text, [string]$PropertyName, [string]$Replacement) {
   $needle = "  " + $PropertyName + ": {"
   $start = $Text.IndexOf($needle)
@@ -254,7 +264,7 @@ function applyFoodPreset(source, target, preset, strengthAmount = 1) {
       (1 - neutralWhiteMask * 0.72) *
       (1 - shadowMask * 0.28);
     if (clarityAmount > 0.001) {
-      const detailBoost = clamp(localDetail * clarityAmount * 1.35, -0.045, 0.045);
+      const detailBoost = clampRange(localDetail * clarityAmount * 1.35, -0.045, 0.045);
       [r, g, b] = shiftRgbToLuma(r, g, b, clamp01(getLuma(r, g, b) + detailBoost));
     }
 
@@ -352,6 +362,7 @@ function applyCreamPreset(source, target, strengthAmount = 1) {
     1
   )
 
+  $script = Remove-JsChangelog $script "v3.16"
   $script = Add-JsChangelog $script "v3.15" "\u4f18\u5316\u4e07\u80fd\u7f8e\u98df\u8c03\u8272\uff0c\u589e\u52a0\u5c40\u90e8\u6e05\u6670\u5ea6\u548c\u9c9c\u660e\u5ea6\u903b\u8f91\uff0c\u5148\u4fdd\u62a4\u767d\u8272\u9ad8\u5149\u7ec6\u8282\uff0c\u518d\u589e\u5f3a\u98df\u7269\u6a59\u9ec4\u548c\u80cc\u666f\u84dd\u8272\u5c42\u6b21\u3002"
   Write-Utf8 $scriptPath $script
 
@@ -366,6 +377,7 @@ function applyCreamPreset(source, target, strengthAmount = 1) {
     (U '\u5f53\u524d\u7248\u672c\uff1a`v3.15`'),
     1
   )
+  $readme = Remove-ReadmeChangelog $readme "v3.16"
   $readme = Add-ReadmeChangelog $readme "v3.15" (U '\u4f18\u5316\u4e07\u80fd\u7f8e\u98df\u8c03\u8272\uff0c\u589e\u52a0\u5c40\u90e8\u6e05\u6670\u5ea6\u548c\u9c9c\u660e\u5ea6\u903b\u8f91\uff0c\u5148\u4fdd\u62a4\u767d\u8272\u9ad8\u5149\u7ec6\u8282\uff0c\u518d\u589e\u5f3a\u98df\u7269\u6a59\u9ec4\u548c\u80cc\u666f\u84dd\u8272\u5c42\u6b21\u3002')
   Write-Utf8 $readmePath $readme
 
@@ -390,11 +402,18 @@ function applyCreamPreset(source, target, strengthAmount = 1) {
   Assert-Contains $scriptCheck 'mode: "food"' "food preset mode"
   Assert-Contains $scriptCheck 'function applyFoodPreset' "food algorithm function"
   Assert-Contains $scriptCheck 'function blurFloatMap' "local clarity helper"
+  Assert-Contains $scriptCheck 'function clampRange' "clampRange helper exists"
   Assert-Contains $scriptCheck '["v3.15",' "script CHANGELOG v3.15"
   Assert-Contains $indexCheck 'v3.15' "index v3.15"
   Assert-Contains $readmeCheck '`v3.15`' "README current version v3.15"
   Assert-Contains $readmeCheck '- `v3.15`' "README changelog v3.15"
   Assert-Contains $swCheck 'cream-photo-editor-v35' "service worker cache v35"
+  if ([regex]::IsMatch($scriptCheck, '\bclamp\(')) {
+    throw "Self-check failed: unknown clamp helper call remains."
+  }
+  if ($scriptCheck.Contains('["v3.16",') -or $readmeCheck.Contains('- `v3.16`')) {
+    throw "Self-check failed: v3.16 changelog remains after restoring v3.15."
+  }
 
   Write-Host "Patch applied: v3.15 food local clarity and highlight protection."
   Write-Host "Backup kept at: $backupDir"
