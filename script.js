@@ -29,7 +29,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.14";
+const APP_VERSION = "v3.15";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -134,21 +134,25 @@ const COLOR_PRESETS = {
     name: "\u4e07\u80fd\u7f8e\u98df\u8c03\u8272",
     mode: "food",
     base: {
-      exposure_factor: 1.10,
-      red_multiplier: 1.010,
-      green_multiplier: 1.002,
-      blue_multiplier: 0.990,
-      contrast_factor: 1.045,
-      saturation_factor: 1.08,
-      gamma: 0.985,
+      exposure_factor: 1.075,
+      red_multiplier: 1.006,
+      green_multiplier: 1.000,
+      blue_multiplier: 0.992,
+      contrast_factor: 1.055,
+      saturation_factor: 1.13,
+      gamma: 0.972,
     },
     highlight_protection: {
       enabled: true,
-      start: 0.76,
-      compression: 0.62,
+      start: 0.66,
+      compression: 0.58,
+    },
+    clarity: {
+      radius: 2,
+      amount: 0.24,
     },
     sharpening: {
-      amount: 0.14,
+      amount: 0.08,
     },
   },
 };
@@ -183,7 +187,8 @@ const CHANGELOG = [
   ["v3.11", "新增万能美食调色预设，按曝光、鲜明度、高光、阴影、饱和、色温、锐度和清晰度参数做本地调色。"],
   ["v3.12", "优化万能美食调色，降低高光提亮并保留白色细节，减少暗部提亮以增强画面层次。"],
   ["v3.13", "重做万能美食调色的高光保护顺序，曝光和饱和主要作用于中间调，暗部不额外提亮，减少又暗又丢高光细节的问题。"],
-  ["v3.14", "重做万能美食调色为专用算法，中间调提亮，高光先保护，暗部不额外提亮，用自然鲜明度保留食物色彩和细节。"],
+  ["v3.14", "重做万能美食调色为专用算法，中间调提亮，高光先保护，暗部不额外提亮，用自然鲜明度保留食物色彩和细节。"],
+  ["v3.15", "\u4f18\u5316\u4e07\u80fd\u7f8e\u98df\u8c03\u8272\uff0c\u589e\u52a0\u5c40\u90e8\u6e05\u6670\u5ea6\u548c\u9c9c\u660e\u5ea6\u903b\u8f91\uff0c\u5148\u4fdd\u62a4\u767d\u8272\u9ad8\u5149\u7ec6\u8282\uff0c\u518d\u589e\u5f3a\u98df\u7269\u6a59\u9ec4\u548c\u80cc\u666f\u84dd\u8272\u5c42\u6b21\u3002"],
 ];
 
 presetSelect.addEventListener("change", () => {
@@ -1506,103 +1511,157 @@ function applyFoodPreset(source, target, preset, strengthAmount = 1) {
   const targetContext = target.getContext("2d", { willReadFrequently: true });
   const imageData = sourceContext.getImageData(0, 0, source.width, source.height);
   const data = imageData.data;
+  const original = new Uint8ClampedArray(data);
+  const width = source.width;
+  const height = source.height;
+  const total = width * height;
   const amount = clamp01(strengthAmount);
   const base = preset.base;
   const highlightProtection = preset.highlight_protection;
+  const lumaMap = new Float32Array(total);
+
+  for (let p = 0, i = 0; p < total; p += 1, i += 4) {
+    lumaMap[p] = getLuma(original[i] / 255, original[i + 1] / 255, original[i + 2] / 255);
+  }
+
+  const blurredLuma = blurFloatMap(lumaMap, width, height, preset.clarity?.radius || 2);
   let sharpenWeightSum = 0;
 
   for (let i = 0; i < data.length; i += 4) {
     const pixel = i / 4;
-    const x = pixel % source.width;
-    const y = Math.floor(pixel / source.width);
-    const originalR = data[i] / 255;
-    const originalG = data[i + 1] / 255;
-    const originalB = data[i + 2] / 255;
-    const originalLuma = getLuma(originalR, originalG, originalB);
-    const highlightMask = smoothstep(0.68, 0.96, originalLuma);
-    const strongHighlightMask = smoothstep(0.82, 0.99, originalLuma);
-    const shadowMask = 1 - smoothstep(0.06, 0.32, originalLuma);
-    const midtoneMask = (1 - highlightMask * 0.88) * (1 - shadowMask * 0.62);
-    const foodExposure = 1 + (base.exposure_factor - 1) * amount * midtoneMask;
-    const channelAmount = amount * (1 - strongHighlightMask * 0.78) * (1 - shadowMask * 0.28);
+    const x = pixel % width;
+    const y = Math.floor(pixel / width);
+    const originalR = original[i] / 255;
+    const originalG = original[i + 1] / 255;
+    const originalB = original[i + 2] / 255;
+    const originalLuma = lumaMap[pixel];
+    const localDetail = originalLuma - blurredLuma[pixel];
+    const originalHsl = rgbToHsl(originalR, originalG, originalB);
 
-    let r = originalR * foodExposure * mix(1, base.red_multiplier, channelAmount);
-    let g = originalG * foodExposure * mix(1, base.green_multiplier, channelAmount);
-    let b = originalB * foodExposure * mix(1, base.blue_multiplier, channelAmount);
+    const highlightMask = smoothstep(0.64, 0.94, originalLuma);
+    const strongHighlightMask = smoothstep(0.78, 0.985, originalLuma);
+    const shadowMask = 1 - smoothstep(0.08, 0.34, originalLuma);
+    const midtoneMask = (1 - highlightMask * 0.76) * (1 - shadowMask * 0.42);
+    const neutralWhiteMask = (1 - smoothstep(0.035, 0.18, originalHsl.s)) * smoothstep(0.48, 0.96, originalLuma);
 
-    const contrastAmount = amount * (1 - strongHighlightMask * 0.52) * (1 - shadowMask * 0.18);
+    const exposureAmount = amount * midtoneMask * (1 - neutralWhiteMask * 0.32);
+    const channelAmount = amount * (1 - strongHighlightMask * 0.82) * (1 - neutralWhiteMask * 0.62);
+
+    let r = originalR * (1 + (base.exposure_factor - 1) * exposureAmount) * mix(1, base.red_multiplier, channelAmount);
+    let g = originalG * (1 + (base.exposure_factor - 1) * exposureAmount) * mix(1, base.green_multiplier, channelAmount);
+    let b = originalB * (1 + (base.exposure_factor - 1) * exposureAmount) * mix(1, base.blue_multiplier, channelAmount);
+
+    const contrastAmount = amount * (1 - strongHighlightMask * 0.45) * (1 - neutralWhiteMask * 0.36);
     r = (r - 0.5) * mix(1, base.contrast_factor, contrastAmount) + 0.5;
     g = (g - 0.5) * mix(1, base.contrast_factor, contrastAmount) + 0.5;
     b = (b - 0.5) * mix(1, base.contrast_factor, contrastAmount) + 0.5;
 
-    const gammaPower = 1 / Math.max(0.01, mix(1, base.gamma, amount * midtoneMask));
+    const gammaPower = 1 / Math.max(0.01, mix(1, base.gamma, amount * midtoneMask * (1 - neutralWhiteMask * 0.4)));
     r = Math.pow(clamp01(r), gammaPower);
     g = Math.pow(clamp01(g), gammaPower);
     b = Math.pow(clamp01(b), gammaPower);
 
     let hsl = rgbToHsl(r, g, b);
-    const originalHsl = rgbToHsl(originalR, originalG, originalB);
-    const neutralMask = 1 - smoothstep(0.025, 0.16, originalHsl.s);
-    const highSaturationMask = smoothstep(0.42, 0.86, originalHsl.s);
+    const highSaturationMask = smoothstep(0.42, 0.9, originalHsl.s);
     const vibranceAmount = amount *
-      (1 - neutralMask * 0.78) *
-      (1 - highSaturationMask * 0.58) *
-      (1 - strongHighlightMask * 0.74) *
-      (1 - shadowMask * 0.25);
+      (1 - neutralWhiteMask * 0.92) *
+      (1 - strongHighlightMask * 0.62) *
+      (1 - highSaturationMask * 0.38);
 
     hsl.s *= mix(1, base.saturation_factor, vibranceAmount);
 
-    const warmFoodMask = Math.max(
-      hueRangeMask(hsl.h, 12, 48),
-      hueRangeMask(hsl.h, 48, 82) * 0.82,
-    );
-    const redFoodMask = hueRangeMask(hsl.h, 345, 18);
+    const redMask = hueRangeMask(hsl.h, 345, 18);
+    const orangeMask = hueRangeMask(hsl.h, 14, 48);
+    const yellowMask = hueRangeMask(hsl.h, 44, 82);
     const greenMask = hueRangeMask(hsl.h, 85, 165);
-    const blueMask = hueRangeMask(hsl.h, 205, 255);
+    const blueMask = hueRangeMask(hsl.h, 200, 255);
 
-    hsl.s *= 1 + warmFoodMask * 0.045 * vibranceAmount;
-    hsl.s *= 1 + redFoodMask * 0.035 * vibranceAmount;
-    hsl.s *= 1 - greenMask * 0.035 * amount;
-    hsl.s *= 1 - blueMask * 0.035 * amount;
-    hsl.h = normalizeHue(hsl.h - warmFoodMask * 1.2 * vibranceAmount);
+    hsl.s *= 1 + redMask * 0.07 * vibranceAmount;
+    hsl.s *= 1 + orangeMask * 0.10 * vibranceAmount;
+    hsl.s *= 1 + yellowMask * 0.08 * vibranceAmount;
+    hsl.s *= 1 + greenMask * 0.04 * amount * (1 - neutralWhiteMask);
+    hsl.s *= 1 + blueMask * 0.06 * amount;
+    hsl.l -= blueMask * 0.018 * amount * (1 - highlightMask);
+    hsl.l -= shadowMask * 0.012 * amount;
+    hsl.h = normalizeHue(hsl.h - (orangeMask + yellowMask) * 0.7 * vibranceAmount);
 
     [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
 
-    const shoulderAmount = amount * smoothstep(0.72, 1, originalLuma);
-    r = mix(r, protectHighlight(r, highlightProtection), shoulderAmount);
-    g = mix(g, protectHighlight(g, highlightProtection), shoulderAmount);
-    b = mix(b, protectHighlight(b, highlightProtection), shoulderAmount);
-
-    const targetLuma = getLuma(r, g, b);
-    const maxHighlightRise = 0.035 + (1 - strongHighlightMask) * 0.055;
-    const maxLuma = originalLuma + maxHighlightRise * amount * (1 - shadowMask);
-    if (highlightMask > 0 && targetLuma > maxLuma) {
-      [r, g, b] = shiftRgbToLuma(r, g, b, mix(targetLuma, maxLuma, highlightMask));
+    const clarityAmount = (preset.clarity?.amount || 0) * amount *
+      (1 - strongHighlightMask * 0.58) *
+      (1 - neutralWhiteMask * 0.72) *
+      (1 - shadowMask * 0.28);
+    if (clarityAmount > 0.001) {
+      const detailBoost = clamp(localDetail * clarityAmount * 1.35, -0.045, 0.045);
+      [r, g, b] = shiftRgbToLuma(r, g, b, clamp01(getLuma(r, g, b) + detailBoost));
     }
 
-    const minShadowLuma = originalLuma - 0.018 * amount;
-    if (shadowMask > 0 && getLuma(r, g, b) < minShadowLuma) {
-      [r, g, b] = shiftRgbToLuma(r, g, b, minShadowLuma);
+    const protectedR = protectHighlight(r, highlightProtection);
+    const protectedG = protectHighlight(g, highlightProtection);
+    const protectedB = protectHighlight(b, highlightProtection);
+    const shoulderAmount = amount * smoothstep(0.66, 1, originalLuma);
+    r = mix(r, protectedR, shoulderAmount);
+    g = mix(g, protectedG, shoulderAmount);
+    b = mix(b, protectedB, shoulderAmount);
+
+    const targetLuma = getLuma(r, g, b);
+    const maxHighlightRise = 0.035 + (1 - strongHighlightMask) * 0.085;
+    const maxLuma = Math.min(0.965, originalLuma + maxHighlightRise * amount * (1 - neutralWhiteMask * 0.25));
+    if (highlightMask > 0 && targetLuma > maxLuma) {
+      [r, g, b] = shiftRgbToLuma(r, g, b, mix(targetLuma, maxLuma, highlightMask));
     }
 
     r = mix(originalR, r, amount);
     g = mix(originalG, g, amount);
     b = mix(originalB, b, amount);
 
-    const dither = (deterministicDither(x, y) / 255) * amount * (1 - strongHighlightMask * 0.82);
-    data[i] = toByte(r + dither);
-    data[i + 1] = toByte(g + dither);
-    data[i + 2] = toByte(b + dither);
+    data[i] = toByte(r);
+    data[i + 1] = toByte(g);
+    data[i + 2] = toByte(b);
 
-    sharpenWeightSum += amount * (1 - strongHighlightMask * 0.78) * (1 - shadowMask * 0.38);
+    sharpenWeightSum += amount * (1 - strongHighlightMask * 0.84) * (1 - neutralWhiteMask * 0.7) * (1 - shadowMask * 0.35);
   }
 
-  const averageSharpenWeight = sharpenWeightSum / (data.length / 4);
+  const averageSharpenWeight = sharpenWeightSum / total;
   if (preset.sharpening?.amount && averageSharpenWeight > 0.001) {
-    applySubtleSharpen(imageData, source.width, source.height, preset.sharpening.amount * averageSharpenWeight);
+    applySubtleSharpen(imageData, width, height, preset.sharpening.amount * averageSharpenWeight);
   }
 
   targetContext.putImageData(imageData, 0, 0);
+}
+
+function blurFloatMap(source, width, height, radius) {
+  const r = Math.max(1, Math.round(radius || 1));
+  const temp = new Float32Array(source.length);
+  const output = new Float32Array(source.length);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let sum = 0;
+      let count = 0;
+      for (let dx = -r; dx <= r; dx += 1) {
+        const xx = Math.min(width - 1, Math.max(0, x + dx));
+        sum += source[y * width + xx];
+        count += 1;
+      }
+      temp[y * width + x] = sum / count;
+    }
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let sum = 0;
+      let count = 0;
+      for (let dy = -r; dy <= r; dy += 1) {
+        const yy = Math.min(height - 1, Math.max(0, y + dy));
+        sum += temp[yy * width + x];
+        count += 1;
+      }
+      output[y * width + x] = sum / count;
+    }
+  }
+
+  return output;
 }
 function applyConfigPreset(source, target, preset, strengthAmount = 1) {
   const sourceContext = source.getContext("2d", { willReadFrequently: true });
