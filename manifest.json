@@ -1,6 +1,6 @@
 {
-  "name": "奶油感产品图自动调色工具",
-  "short_name": "奶油调色",
+  "name": "图片自动调色工具",
+  "short_name": "调色工具",
   "description": "在浏览器本地完成产品图奶油感调色，不上传照片。",
   "start_url": "./index.html",
   "scope": "./",
