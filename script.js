@@ -187,7 +187,8 @@ const CHANGELOG = [
   ["v3.11", "新增万能美食调色预设，按曝光、鲜明度、高光、阴影、饱和、色温、锐度和清晰度参数做本地调色。"],
   ["v3.12", "优化万能美食调色，降低高光提亮并保留白色细节，减少暗部提亮以增强画面层次。"],
   ["v3.13", "重做万能美食调色的高光保护顺序，曝光和饱和主要作用于中间调，暗部不额外提亮，减少又暗又丢高光细节的问题。"],
-  ["v3.14", "重做万能美食调色为专用算法，中间调提亮，高光先保护，暗部不额外提亮，用自然鲜明度保留食物色彩和细节。"],
+  ["v3.14", "重做万能美食调色为专用算法，中间调提亮，高光先保护，暗部不额外提亮，用自然鲜明度保留食物色彩和细节。"],
+
   ["v3.15", "\u4f18\u5316\u4e07\u80fd\u7f8e\u98df\u8c03\u8272\uff0c\u589e\u52a0\u5c40\u90e8\u6e05\u6670\u5ea6\u548c\u9c9c\u660e\u5ea6\u903b\u8f91\uff0c\u5148\u4fdd\u62a4\u767d\u8272\u9ad8\u5149\u7ec6\u8282\uff0c\u518d\u589e\u5f3a\u98df\u7269\u6a59\u9ec4\u548c\u80cc\u666f\u84dd\u8272\u5c42\u6b21\u3002"],
 ];
 
@@ -1592,7 +1593,7 @@ function applyFoodPreset(source, target, preset, strengthAmount = 1) {
       (1 - neutralWhiteMask * 0.72) *
       (1 - shadowMask * 0.28);
     if (clarityAmount > 0.001) {
-      const detailBoost = clamp(localDetail * clarityAmount * 1.35, -0.045, 0.045);
+      const detailBoost = clampRange(localDetail * clarityAmount * 1.35, -0.045, 0.045);
       [r, g, b] = shiftRgbToLuma(r, g, b, clamp01(getLuma(r, g, b) + detailBoost));
     }
 
