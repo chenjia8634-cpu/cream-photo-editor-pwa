@@ -340,9 +340,6 @@ h2 {
   gap: 6px;
   margin-left: 8px;
   vertical-align: middle;
-  touch-action: manipulation;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 .preview-nav-button {
@@ -357,11 +354,7 @@ h2 {
   font-size: 21px;
   font-weight: 760;
   line-height: 1;
-  touch-action: manipulation;
-  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 .preview-nav-button:active {

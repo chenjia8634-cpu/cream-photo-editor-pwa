@@ -29,7 +29,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.17";
+const APP_VERSION = "v3.15";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -158,7 +158,6 @@ const COLOR_PRESETS = {
 };
 
 const CHANGELOG = [
-  ["v3.17", "\u4f18\u5316\u9884\u89c8\u4e0a\u4e00\u5f20\u002f\u4e0b\u4e00\u5f20\u6309\u94ae\uff0c\u51cf\u5c11\u0020\u0069\u0050\u0068\u006f\u006e\u0065\u0020\u8fde\u70b9\u89e6\u53d1\u9875\u9762\u53cc\u51fb\u653e\u5927\uff1b\u9009\u62e9\u4e07\u80fd\u7f8e\u98df\u8c03\u8272\u65f6\u9ed8\u8ba4\u5207\u5230\u0020\u0036\u0030\u0025\u0020\u5f3a\u5ea6\u3002"],
   ["v1.0", "完成首版 MVP，支持 JPG/PNG 上传、Canvas 本地调色、原图/调色后预览和 JPG 保存。"],
   ["v1.1", "提升导出质量，减少 JPG 压缩导致的马赛克和画质损失。"],
   ["v1.2", "修复手机端预览空白但可以下载的问题。"],
@@ -193,27 +192,15 @@ const CHANGELOG = [
   ["v3.15", "\u4f18\u5316\u4e07\u80fd\u7f8e\u98df\u8c03\u8272\uff0c\u589e\u52a0\u5c40\u90e8\u6e05\u6670\u5ea6\u548c\u9c9c\u660e\u5ea6\u903b\u8f91\uff0c\u5148\u4fdd\u62a4\u767d\u8272\u9ad8\u5149\u7ec6\u8282\uff0c\u518d\u589e\u5f3a\u98df\u7269\u6a59\u9ec4\u548c\u80cc\u666f\u84dd\u8272\u5c42\u6b21\u3002"],
 ];
 
-function setPresetStrength(percent) {
-  const nextValue = Math.max(0, Math.min(100, Number(percent) || 0));
-  strengthSlider.value = String(nextValue);
-  presetStrength = nextValue / 100;
-  strengthValue.textContent = `${nextValue}%`;
-}
-
-function applyPresetDefaultStrength() {
-  if (activePresetId === "universal_food") {
-    setPresetStrength(60);
-  }
-}
 presetSelect.addEventListener("change", () => {
   activePresetId = presetSelect.value;
-  applyPresetDefaultStrength();
-  const presetName = COLOR_PRESETS[activePresetId]?.name || "\u5f53\u524d\u98ce\u683c";
-  setStatus(`\u5df2\u5207\u6362\u5230\u300c${presetName}\u300d\uff0c\u5f53\u524d\u5f3a\u5ea6 ${strengthSlider.value}%\u3002\u5982\u9700\u5e94\u7528\u5230\u5f53\u524d\u56fe\u7247\uff0c\u8bf7\u70b9\u91cd\u65b0\u7528\u5f53\u524d\u5f3a\u5ea6\u5904\u7406\u3002`);
+  const presetName = COLOR_PRESETS[activePresetId]?.name || "当前风格";
+  setStatus(`已切换到「${presetName}」。如需应用到当前图片，请点重新用当前强度处理。`);
 });
 
 strengthSlider.addEventListener("input", () => {
-  setPresetStrength(strengthSlider.value);
+  presetStrength = Number(strengthSlider.value) / 100;
+  strengthValue.textContent = `${strengthSlider.value}%`;
 });
 
 reprocessButton.addEventListener("click", async () => {
@@ -225,37 +212,13 @@ applyAllButton.addEventListener("click", async () => {
   await applyCurrentSettingsToAllImages();
 });
 
-let previewNavLastTouchAt = 0;
+prevItemButton.addEventListener("click", () => {
+  selectAdjacentBatchItem(-1);
+});
 
-function handlePreviewNavTap(direction, event) {
-  if (event) {
-    event.preventDefault();
-    event.currentTarget?.blur?.();
-  }
-
-  if (event?.type === "click" && Date.now() - previewNavLastTouchAt < 260) {
-    return;
-  }
-
-  if (event?.type === "touchend") {
-    previewNavLastTouchAt = Date.now();
-  }
-
-  selectAdjacentBatchItem(direction);
-}
-
-function bindPreviewNavButton(button, direction) {
-  button.addEventListener("touchend", (event) => {
-    handlePreviewNavTap(direction, event);
-  }, { passive: false });
-
-  button.addEventListener("click", (event) => {
-    handlePreviewNavTap(direction, event);
-  });
-}
-
-bindPreviewNavButton(prevItemButton, -1);
-bindPreviewNavButton(nextItemButton, 1);
+nextItemButton.addEventListener("click", () => {
+  selectAdjacentBatchItem(1);
+});
 
 saveSelectedButton.addEventListener("click", async () => {
   const selectedItems = batchItems.filter((item) => item.selected);
