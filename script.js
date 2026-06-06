@@ -1,4 +1,4 @@
-﻿const input = document.querySelector("#photoInput");
+const input = document.querySelector("#photoInput");
 const sourceCanvas = document.querySelector("#sourceCanvas");
 const resultCanvas = document.querySelector("#resultCanvas");
 const sourcePreview = document.querySelector("#sourcePreview");
@@ -29,7 +29,7 @@ const changelogList = document.querySelector("#changelogList");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.11";
+const APP_VERSION = "v3.12";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -131,50 +131,49 @@ const COLOR_PRESETS = {
     },
   },
   universal_food: {
-    name: "万能美食调色",
+    name: "\u4e07\u80fd\u7f8e\u98df\u8c03\u8272",
     mode: "config",
     base: {
-      exposure_factor: 1.15,
-      red_multiplier: 1.015,
-      green_multiplier: 1.003,
-      blue_multiplier: 0.985,
-      black_lift: 0.006,
-      contrast_factor: 1.05,
-      saturation_factor: 1.12,
-      gamma: 0.965,
+      exposure_factor: 1.08,
+      red_multiplier: 1.012,
+      green_multiplier: 1.002,
+      blue_multiplier: 0.988,
+      black_lift: 0.001,
+      contrast_factor: 1.055,
+      saturation_factor: 1.10,
+      gamma: 0.985,
     },
     tone_curve: [
       [0.00, 0.000],
-      [0.20, 0.225],
-      [0.50, 0.535],
-      [0.75, 0.758],
-      [0.90, 0.855],
-      [1.00, 0.955],
+      [0.20, 0.205],
+      [0.50, 0.515],
+      [0.75, 0.738],
+      [0.90, 0.825],
+      [1.00, 0.935],
     ],
     selective_colors: [
-      { hue_range: [345, 15], saturation_multiplier: 1.08, lightness_shift: 0.000, hue_shift: 0 },
-      { hue_range: [15, 45], saturation_multiplier: 1.12, lightness_shift: 0.004, hue_shift: -1 },
-      { hue_range: [45, 85], saturation_multiplier: 1.10, lightness_shift: 0.003, hue_shift: -1 },
-      { hue_range: [85, 165], saturation_multiplier: 1.03, lightness_shift: 0.002, hue_shift: -2 },
+      { hue_range: [345, 15], saturation_multiplier: 1.07, lightness_shift: 0.000, hue_shift: 0 },
+      { hue_range: [15, 45], saturation_multiplier: 1.10, lightness_shift: 0.001, hue_shift: -1 },
+      { hue_range: [45, 85], saturation_multiplier: 1.08, lightness_shift: 0.000, hue_shift: -1 },
+      { hue_range: [85, 165], saturation_multiplier: 1.01, lightness_shift: 0.000, hue_shift: -2 },
       { hue_range: [165, 210], saturation_multiplier: 0.98, lightness_shift: 0.000, hue_shift: -1 },
       { hue_range: [210, 255], saturation_multiplier: 0.96, lightness_shift: 0.000, hue_shift: 1 },
       { hue_range: [255, 305], saturation_multiplier: 0.98, lightness_shift: 0.000, hue_shift: 0 },
-      { hue_range: [305, 345], saturation_multiplier: 1.04, lightness_shift: 0.000, hue_shift: 0 },
+      { hue_range: [305, 345], saturation_multiplier: 1.03, lightness_shift: 0.000, hue_shift: 0 },
     ],
     highlight_protection: {
       enabled: true,
-      start: 0.78,
-      compression: 0.50,
+      start: 0.70,
+      compression: 0.36,
     },
     shadow_handling: {
-      lift: 0.008,
-      softness: 0.30,
+      lift: 0.000,
+      softness: 0.22,
     },
     sharpening: {
-      amount: 0.20,
+      amount: 0.18,
     },
-  },
-};
+  },};
 
 const CHANGELOG = [
   ["v1.0", "完成首版 MVP，支持 JPG/PNG 上传、Canvas 本地调色、原图/调色后预览和 JPG 保存。"],
