@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f6efe4">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="奶油调色">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>奶油感产品图自动调色工具 v3.17</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <p class="eyebrow">本地浏览器处理 · 不上传照片</p>
+        <h1>奶油感产品图自动调色工具 <span class="version-badge">v3.17</span></h1>
+        <button id="changelogButton" class="text-link-button" type="button">更新日志</button>
+      </header>
+
+      <section class="panel upload-panel" aria-label="上传照片">
+        <label class="upload-box" for="photoInput">
+          <span class="upload-icon" aria-hidden="true">+</span>
+          <span class="upload-title">选择产品图</span>
+          <span class="upload-subtitle">支持 JPG / PNG / HEIC / HEIF / MOV / MP4</span>
+          <span class="upload-note">图片可批量调色；iPhone 视频使用兼容模式导出调色视频</span>
+        </label>
+        <input id="photoInput" type="file" accept="image/jpeg,image/jpg,image/png,image/heic,image/heif,video/mp4,video/quicktime,video/mov" multiple hidden>
+      </section>
+
+      <section class="panel control-panel" aria-label="调色强度">
+        <div class="control-row">
+          <label for="presetSelect">调色风格</label>
+        </div>
+        <select id="presetSelect" class="preset-select">
+          <option value="cream_product">奶油感产品图</option>
+          <option value="warm_brown_soft_clean">暖棕清透轻调</option>
+          <option value="pink_brown_home_kawaii">粉棕居家玩偶感</option>
+          <option value="universal_food">万能美食调色</option>
+        </select>
+        <div class="control-row">
+          <label for="strengthSlider">调色强度</label>
+          <output id="strengthValue" for="strengthSlider">100%</output>
+        </div>
+        <input id="strengthSlider" class="strength-slider" type="range" min="0" max="100" step="5" value="100">
+        <div class="control-actions">
+          <button id="reprocessButton" class="small-action-button" type="button" disabled>重新用当前强度处理</button>
+          <button id="applyAllButton" class="small-action-button" type="button" disabled>应用到全部照片</button>
+        </div>
+        <p class="control-hint">调完强度或色调后，可重新生成当前图片，也可以应用到全部照片。</p>
+      </section>
+
+      <section id="statusPanel" class="status-panel" aria-live="polite">
+        <span id="statusText">请选择一张照片开始调色。</span>
+      </section>
+
+      <section class="preview-grid" aria-label="调色预览">
+        <article class="preview-card processing-card" aria-hidden="true">
+          <img id="sourcePreview" class="preview-image" alt="">
+          <canvas id="sourceCanvas" class="preview-canvas" aria-label="原图处理画布"></canvas>
+        </article>
+
+        <article class="preview-card">
+          <div class="preview-head">
+            <h2>
+              调色后 <span id="currentIndexBadge" class="current-index-badge">未选择</span>
+              <span class="preview-nav" aria-label="快速切换预览">
+                <button id="prevItemButton" class="preview-nav-button" type="button" disabled aria-label="上一张">‹</button>
+                <button id="nextItemButton" class="preview-nav-button" type="button" disabled aria-label="下一张">›</button>
+              </span>
+            </h2>
+            <button id="compareButton" class="compare-button" type="button" disabled>按住看原图</button>
+          </div>
+          <img id="resultPreview" class="preview-image" alt="调色后预览">
+          <canvas id="resultCanvas" class="preview-canvas" aria-label="调色后预览"></canvas>
+          <video id="videoPreview" class="preview-video" controls playsinline muted></video>
+          <div id="resultEmpty" class="empty-state">自动生成预览</div>
+        </article>
+      </section>
+
+      <section id="batchSection" class="batch-section" aria-label="批量调色结果">
+        <div class="section-head">
+          <h2>批量结果</h2>
+          <span id="batchCount" class="batch-count">0 张</span>
+        </div>
+        <p class="batch-hint">勾选多张后，可保存已选结果。</p>
+        <div id="batchResults" class="batch-results"></div>
+      </section>
+
+      <div class="actions">
+        <button id="saveButton" class="save-button" type="button" disabled>保存当前结果</button>
+        <button id="saveSelectedButton" class="save-button secondary-button" type="button" disabled>保存已选结果</button>
+        <button id="saveAllButton" class="save-button secondary-button" type="button" disabled>保存全部结果</button>
+        <a id="downloadLink" class="download-link" download="cream-tone-photo.jpg" hidden>下载图片</a>
+      </div>
+
+      <section class="panel privacy-panel">
+        <h2>处理说明</h2>
+        <p>照片和视频只在当前浏览器里读取和调色，不会上传到任何服务器。图片输出为高质量 JPG；iPhone 视频兼容模式会导出调色视频，但通常无法保留原声音。</p>
+      </section>
+    </main>
+
+    <div id="changelogDialog" class="modal" hidden>
+      <div class="modal-backdrop" data-close-modal></div>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="changelogTitle">
+        <div class="modal-head">
+          <h2 id="changelogTitle">更新日志</h2>
+          <button class="modal-close" type="button" data-close-modal>关闭</button>
+        </div>
+        <div id="changelogList" class="changelog-list"></div>
+      </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" defer></script>
+    <script src="script.js" defer></script>
+  </body>
+</html>
