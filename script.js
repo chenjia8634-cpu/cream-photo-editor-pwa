@@ -25,6 +25,7 @@ const prevItemButton = document.querySelector("#prevItemButton");
 const nextItemButton = document.querySelector("#nextItemButton");
 const changelogButton = document.querySelector("#changelogButton");
 const checkUpdateButton = document.querySelector("#checkUpdateButton");
+const updateCheckStatus = document.querySelector("#updateCheckStatus");
 const changelogDialog = document.querySelector("#changelogDialog");
 const changelogList = document.querySelector("#changelogList");
 const customPresetSelect = document.querySelector("#customPresetSelect");
@@ -49,12 +50,13 @@ const installTipTitle = document.querySelector("#installTipTitle");
 const installTipText = document.querySelector("#installTipText");
 const installTipClose = document.querySelector("#installTipClose");
 const updatePrompt = document.querySelector("#updatePrompt");
+const previewGrid = document.querySelector(".preview-grid");
 const updatePromptText = document.querySelector("#updatePromptText");
 const refreshAppButton = document.querySelector("#refreshAppButton");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.20";
+const APP_VERSION = "v3.21";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -83,6 +85,7 @@ const AUTO_PREVIEW_DELAY_MS = 520;
 let autoPreviewTimer = 0;
 let autoPreviewQueued = false;
 let autoPreviewRunning = false;
+let hasAutoScrolledToPreview = false;
 let activeServiceWorkerRegistration = null;
 let waitingServiceWorker = null;
 let refreshingForUpdate = false;
@@ -239,6 +242,7 @@ const CHANGELOG = [
   ["v3.18", "\u56fa\u5b9a\u9884\u89c8\u4e0a\u4e00\u5f20\u002f\u4e0b\u4e00\u5f20\u6309\u94ae\u4f4d\u7f6e\uff0c\u7981\u7528\u65f6\u4fdd\u7559\u5360\u4f4d\u4f46\u4e0d\u663e\u793a\uff0c\u907f\u514d\u7b2c\u4e00\u5f20\u548c\u6700\u540e\u4e00\u5f20\u7684\u7ffb\u9875\u6309\u94ae\u5de6\u53f3\u8df3\u52a8\u3002"],
   ["v3.19", "增加自定义微调参数、防过曝检测与自动高光保护，并增加添加到主屏幕提示和发现新版本后的刷新提示。"],
   ["v3.20", "增加自定义微调自动预览、浏览器本地保存自定义预设、手动检查更新和更清晰的新版本刷新提示，并优化 iPhone Safari 与微信内打开时的添加到主屏幕提示逻辑。"],
+  ["v3.21", "优化页面布局，上传后优先展示大预览图，将自定义预设折叠收纳，并让手动检查更新有明确的按钮和状态反馈。"],
 ];
 
 function setPresetStrength(percent) {
@@ -906,10 +910,28 @@ function stopStreamTracks(stream) {
   stream.getTracks().forEach((track) => track.stop());
 }
 
+
+function updateHasResultsLayout(hasResults) {
+  document.body.classList.toggle("has-results", Boolean(hasResults));
+  if (!hasResults) {
+    hasAutoScrolledToPreview = false;
+  }
+}
+
+function maybeScrollPreviewIntoView() {
+  if (hasAutoScrolledToPreview || !previewGrid) return;
+  hasAutoScrolledToPreview = true;
+
+  window.setTimeout(() => {
+    previewGrid.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 120);
+}
+
 function addBatchItem(item) {
   item.index = batchItems.length + 1;
   item.selected = false;
   batchItems.push(item);
+  updateHasResultsLayout(true);
   batchSection.classList.add("has-results");
   batchCount.textContent = `${batchItems.length} 张`;
 
@@ -987,6 +1009,7 @@ function addBatchItem(item) {
   });
   batchResults.append(article);
   selectBatchItem(item, article);
+  if (item.index === 1) maybeScrollPreviewIntoView();
 }
 
 function selectBatchItem(item, article) {
@@ -1244,6 +1267,7 @@ async function updateImageItemWithCurrentSettings(item, options = {}) {
 
 function addBatchError(fileName, message) {
   batchSection.classList.add("has-results");
+  updateHasResultsLayout(true);
 
   const article = document.createElement("article");
   article.className = "batch-item error-item";
@@ -2771,6 +2795,7 @@ function resetOutput() {
     }
   });
   batchItems = [];
+  updateHasResultsLayout(false);
 
   if (sourcePreviewUrl) {
     URL.revokeObjectURL(sourcePreviewUrl);
@@ -2865,12 +2890,37 @@ installTipClose?.addEventListener("click", () => {
   if (installTip) installTip.hidden = true;
 });
 
+let updateCheckStatusTimer = 0;
+
+function setUpdateCheckStatus(message, options = {}) {
+  if (!updateCheckStatus) return;
+  const { autoHide = true, isError = false } = options;
+  window.clearTimeout(updateCheckStatusTimer);
+  updateCheckStatus.textContent = message;
+  updateCheckStatus.classList.toggle("is-error", Boolean(isError));
+
+  if (autoHide && message) {
+    updateCheckStatusTimer = window.setTimeout(() => {
+      updateCheckStatus.textContent = "";
+      updateCheckStatus.classList.remove("is-error");
+    }, 4200);
+  }
+}
+
+function reloadWithCacheBuster() {
+  const url = new URL(window.location.href);
+  url.searchParams.set("v", APP_VERSION.replace(/^v/, ""));
+  url.searchParams.set("t", String(Date.now()));
+  window.location.href = url.toString();
+}
+
 function showUpdatePrompt(worker) {
   waitingServiceWorker = worker || waitingServiceWorker;
   if (updatePromptText) {
     updatePromptText.textContent = `发现新版本。当前页面是 ${APP_VERSION}，点击刷新后即可使用最新功能。`;
   }
   if (updatePrompt) updatePrompt.hidden = false;
+  setUpdateCheckStatus("发现新版本", { autoHide: false });
 }
 
 refreshAppButton?.addEventListener("click", () => {
@@ -2878,39 +2928,106 @@ refreshAppButton?.addEventListener("click", () => {
     waitingServiceWorker.postMessage({ type: "SKIP_WAITING" });
     return;
   }
-  window.location.reload();
+  reloadWithCacheBuster();
 });
 
+function waitForInstallingWorker(registration, showFeedback) {
+  const installingWorker = registration.installing || registration.waiting;
+  if (!installingWorker) return Promise.resolve(false);
+
+  if (registration.waiting) {
+    showUpdatePrompt(registration.waiting);
+    return Promise.resolve(true);
+  }
+
+  if (showFeedback) setUpdateCheckStatus("正在安装更新…", { autoHide: false });
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (foundUpdate) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(foundUpdate);
+    };
+
+    const timer = window.setTimeout(() => finish(false), 4500);
+    installingWorker.addEventListener("statechange", () => {
+      if (installingWorker.state === "installed") {
+        window.clearTimeout(timer);
+        if (navigator.serviceWorker.controller) {
+          showUpdatePrompt(installingWorker);
+          finish(true);
+        } else {
+          finish(false);
+        }
+      }
+    });
+  });
+}
+
+async function getServiceWorkerRegistrationForUpdate() {
+  if (activeServiceWorkerRegistration) return activeServiceWorkerRegistration;
+
+  let registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) {
+    registration = await navigator.serviceWorker.register("sw.js");
+  }
+
+  activeServiceWorkerRegistration = registration;
+  return registration;
+}
+
 async function checkForAppUpdate(showFeedback = false) {
+  if (showFeedback) {
+    setUpdateCheckStatus("正在检查…", { autoHide: false });
+    setStatus(`正在检查更新，当前版本 ${APP_VERSION}...`);
+    checkUpdateButton.disabled = true;
+    checkUpdateButton.textContent = "检查中";
+  }
+
   if (!("serviceWorker" in navigator) || !location.protocol.startsWith("http")) {
-    if (showFeedback) setStatus("当前打开方式不支持检查更新，请部署到 HTTPS 后再试。");
+    if (showFeedback) {
+      setUpdateCheckStatus("当前打开方式不支持", { isError: true });
+      setStatus("当前打开方式不支持检查更新，请部署到 HTTPS 后再试。");
+      checkUpdateButton.disabled = false;
+      checkUpdateButton.textContent = "检查更新";
+    }
     return;
   }
 
   try {
-    const registration = activeServiceWorkerRegistration || await navigator.serviceWorker.getRegistration();
-    if (!registration) {
-      if (showFeedback) setStatus("正在启用离线缓存，请刷新一次后再检查更新。");
-      return;
-    }
+    const registration = await getServiceWorkerRegistrationForUpdate();
 
-    activeServiceWorkerRegistration = registration;
     if (registration.waiting) {
       showUpdatePrompt(registration.waiting);
       return;
     }
 
-    if (showFeedback) setStatus(`正在检查更新，当前版本 ${APP_VERSION}...`);
     await registration.update();
 
     if (registration.waiting) {
       showUpdatePrompt(registration.waiting);
-    } else if (showFeedback) {
-      setStatus(`已检查更新：当前已是 ${APP_VERSION}。`);
+      return;
+    }
+
+    const foundInstallingUpdate = await waitForInstallingWorker(registration, showFeedback);
+    if (foundInstallingUpdate) return;
+
+    if (showFeedback) {
+      setUpdateCheckStatus(`已是 ${APP_VERSION}`);
+      setStatus(`已检查更新：当前已是 ${APP_VERSION}。如果刚刚部署过新文件，请等几十秒后再点一次，或刷新页面。`);
     }
   } catch (error) {
     console.warn("Update check failed:", error);
-    if (showFeedback) setStatus("检查更新失败，请稍后刷新页面再试。");
+    if (showFeedback) {
+      setUpdateCheckStatus("检查失败", { isError: true });
+      setStatus("检查更新失败，请稍后刷新页面再试。");
+    }
+  } finally {
+    if (showFeedback) {
+      checkUpdateButton.disabled = false;
+      checkUpdateButton.textContent = "检查更新";
+    }
   }
 }
 

@@ -81,6 +81,7 @@ h1 {
 
 .header-actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 10px;
@@ -94,6 +95,17 @@ h1 {
   font-size: 13px;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.update-check-status {
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.update-check-status.is-error {
+  color: #9b5c42;
 }
 
 h2 {
@@ -118,7 +130,7 @@ h2 {
 .upload-box {
   display: grid;
   place-items: center;
-  min-height: 178px;
+  min-height: 158px;
   padding: 24px 16px;
   border: 1.5px dashed #d7b88f;
   border-radius: 14px;
@@ -158,8 +170,36 @@ h2 {
   margin-top: 6px;
 }
 
+body.has-results .upload-panel {
+  padding: 8px;
+}
+
+body.has-results .upload-box {
+  display: flex;
+  min-height: 72px;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 12px;
+}
+
+body.has-results .upload-icon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 0;
+  font-size: 23px;
+}
+
+body.has-results .upload-title {
+  font-size: 16px;
+}
+
+body.has-results .upload-subtitle,
+body.has-results .upload-note {
+  display: none;
+}
+
 .status-panel {
-  margin-top: 12px;
+  margin-top: 10px;
   padding: 12px 14px;
   color: var(--muted);
   font-size: 14px;
@@ -198,15 +238,21 @@ h2 {
 }
 
 .custom-preset-panel {
-  margin: -2px 0 16px;
-  padding: 12px;
-  border: 1px solid rgba(157, 121, 83, 0.16);
-  border-radius: 14px;
-  background: rgba(255, 246, 231, 0.72);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.custom-preset-panel summary {
+  color: #765f47;
+  font-size: 14px;
+  font-weight: 760;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .custom-preset-select {
-  margin-bottom: 10px;
+  margin: 10px 0;
 }
 
 .custom-preset-actions {
@@ -220,7 +266,7 @@ h2 {
 }
 
 .custom-preset-hint {
-  margin: 8px 0 0;
+  margin: 8px 0 10px;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
@@ -476,7 +522,7 @@ h2 {
   display: none;
   width: 100%;
   height: auto;
-  max-height: 62vh;
+  max-height: 68vh;
   object-fit: contain;
   background: #fff;
 }
@@ -824,6 +870,14 @@ video.batch-thumb {
 }
 
 @media (max-width: 460px) {
+  .app-header {
+    padding-bottom: 12px;
+  }
+
+  h1 {
+    font-size: clamp(24px, 7.5vw, 32px);
+  }
+
   .install-tip,
   .update-prompt {
     align-items: stretch;

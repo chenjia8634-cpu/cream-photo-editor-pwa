@@ -1,4 +1,4 @@
-const CACHE_NAME = "cream-photo-editor-v40-auto-preview-presets";
+const CACHE_NAME = "cream-photo-editor-v41-layout-update-polish";
 const APP_SHELL = [
   "./",
   "./index.html",
