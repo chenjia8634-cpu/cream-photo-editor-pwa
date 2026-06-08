@@ -369,7 +369,9 @@ h2 {
 }
 
 .preview-nav-button:disabled {
-  display: none;
+  visibility: hidden;
+  pointer-events: none;
+  transform: none;
 }
 
 .preview-canvas {
