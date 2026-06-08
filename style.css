@@ -204,6 +204,121 @@ h2 {
   line-height: 1.45;
 }
 
+.advanced-panel {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.advanced-panel summary {
+  color: #765f47;
+  font-size: 14px;
+  font-weight: 760;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.advanced-hint {
+  margin: 8px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.adjustment-group {
+  display: grid;
+  gap: 8px;
+}
+
+.adjustment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #594838;
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.adjustment-row output {
+  min-width: 38px;
+  color: #8f6f4e;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.adjustment-slider {
+  width: 100%;
+  margin: 0 0 4px;
+  accent-color: var(--button);
+}
+
+.subtle-button {
+  margin-top: 8px;
+  background: #fff1df;
+}
+
+.exposure-notice {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(157, 121, 83, 0.2);
+  border-radius: 12px;
+  color: #6f5b45;
+  background: #fff4e4;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.exposure-notice.is-ok {
+  color: #6d6658;
+  background: #fbf4ea;
+}
+
+.exposure-notice.is-warning {
+  color: #755536;
+  background: #fff0d9;
+}
+
+.install-tip,
+.update-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 250, 242, 0.94);
+  box-shadow: var(--shadow);
+}
+
+.install-tip strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.install-tip p,
+.update-prompt span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tip-close {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(157, 121, 83, 0.24);
+  border-radius: 999px;
+  color: #7b6248;
+  background: #f5e6d1;
+  font-size: 13px;
+  font-weight: 720;
+}
+
 .control-actions {
   margin: 10px 0 8px;
 }
@@ -670,6 +785,18 @@ video.batch-thumb {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.55;
+}
+
+@media (max-width: 460px) {
+  .install-tip,
+  .update-prompt {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tip-close {
+    width: 100%;
+  }
 }
 
 @media (min-width: 700px) {

@@ -26,10 +26,28 @@ const nextItemButton = document.querySelector("#nextItemButton");
 const changelogButton = document.querySelector("#changelogButton");
 const changelogDialog = document.querySelector("#changelogDialog");
 const changelogList = document.querySelector("#changelogList");
+const brightnessSlider = document.querySelector("#brightnessSlider");
+const brightnessValue = document.querySelector("#brightnessValue");
+const highlightsSlider = document.querySelector("#highlightsSlider");
+const highlightsValue = document.querySelector("#highlightsValue");
+const shadowsSlider = document.querySelector("#shadowsSlider");
+const shadowsValue = document.querySelector("#shadowsValue");
+const temperatureSlider = document.querySelector("#temperatureSlider");
+const temperatureValue = document.querySelector("#temperatureValue");
+const saturationSlider = document.querySelector("#saturationSlider");
+const saturationValue = document.querySelector("#saturationValue");
+const claritySlider = document.querySelector("#claritySlider");
+const clarityValue = document.querySelector("#clarityValue");
+const resetAdjustmentsButton = document.querySelector("#resetAdjustmentsButton");
+const exposureNotice = document.querySelector("#exposureNotice");
+const installTip = document.querySelector("#installTip");
+const installTipClose = document.querySelector("#installTipClose");
+const updatePrompt = document.querySelector("#updatePrompt");
+const refreshAppButton = document.querySelector("#refreshAppButton");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.18";
+const APP_VERSION = "v3.19";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -41,6 +59,19 @@ let batchItems = [];
 let selectedItem = null;
 let presetStrength = 1;
 let activePresetId = "cream_product";
+const CUSTOM_ADJUSTMENT_DEFAULTS = {
+  brightness: 0,
+  highlights: 0,
+  shadows: 0,
+  temperature: 0,
+  saturation: 0,
+  clarity: 0,
+};
+
+const customAdjustments = { ...CUSTOM_ADJUSTMENT_DEFAULTS };
+
+let waitingServiceWorker = null;
+let refreshingForUpdate = false;
 let ffmpegInstance = null;
 let ffmpegHelpers = null;
 
@@ -192,6 +223,7 @@ const CHANGELOG = [
   ["v3.16", "内部过渡维护版本，延续万能美食调色优化后的使用体验整理，为后续翻页按钮和默认强度优化做准备。"],
   ["v3.17", "\u4f18\u5316\u9884\u89c8\u4e0a\u4e00\u5f20\u002f\u4e0b\u4e00\u5f20\u6309\u94ae\uff0c\u51cf\u5c11\u0020\u0069\u0050\u0068\u006f\u006e\u0065\u0020\u8fde\u70b9\u89e6\u53d1\u9875\u9762\u53cc\u51fb\u653e\u5927\uff1b\u9009\u62e9\u4e07\u80fd\u7f8e\u98df\u8c03\u8272\u65f6\u9ed8\u8ba4\u5207\u5230\u0020\u0036\u0030\u0025\u0020\u5f3a\u5ea6\u3002"],
   ["v3.18", "\u56fa\u5b9a\u9884\u89c8\u4e0a\u4e00\u5f20\u002f\u4e0b\u4e00\u5f20\u6309\u94ae\u4f4d\u7f6e\uff0c\u7981\u7528\u65f6\u4fdd\u7559\u5360\u4f4d\u4f46\u4e0d\u663e\u793a\uff0c\u907f\u514d\u7b2c\u4e00\u5f20\u548c\u6700\u540e\u4e00\u5f20\u7684\u7ffb\u9875\u6309\u94ae\u5de6\u53f3\u8df3\u52a8\u3002"],
+  ["v3.19", "增加自定义微调参数、防过曝检测与自动高光保护，并增加添加到主屏幕提示和发现新版本后的刷新提示。"],
 ];
 
 function setPresetStrength(percent) {
@@ -216,6 +248,57 @@ presetSelect.addEventListener("change", () => {
 strengthSlider.addEventListener("input", () => {
   setPresetStrength(strengthSlider.value);
 });
+
+const ADJUSTMENT_CONTROLS = [
+  { key: "brightness", slider: brightnessSlider, output: brightnessValue, label: "亮度" },
+  { key: "highlights", slider: highlightsSlider, output: highlightsValue, label: "高光" },
+  { key: "shadows", slider: shadowsSlider, output: shadowsValue, label: "阴影" },
+  { key: "temperature", slider: temperatureSlider, output: temperatureValue, label: "色温" },
+  { key: "saturation", slider: saturationSlider, output: saturationValue, label: "饱和度" },
+  { key: "clarity", slider: claritySlider, output: clarityValue, label: "清晰度" },
+];
+
+function formatSignedValue(value) {
+  const number = Number(value) || 0;
+  return number > 0 ? `+${number}` : `${number}`;
+}
+
+function syncCustomAdjustmentOutputs() {
+  for (const control of ADJUSTMENT_CONTROLS) {
+    if (!control.slider || !control.output) continue;
+    customAdjustments[control.key] = Number(control.slider.value) || 0;
+    control.output.textContent = formatSignedValue(customAdjustments[control.key]);
+  }
+}
+
+function hasCustomAdjustments() {
+  return ADJUSTMENT_CONTROLS.some((control) => customAdjustments[control.key] !== CUSTOM_ADJUSTMENT_DEFAULTS[control.key]);
+}
+
+function getCustomAdjustmentStatusText() {
+  const active = ADJUSTMENT_CONTROLS
+    .filter((control) => customAdjustments[control.key] !== CUSTOM_ADJUSTMENT_DEFAULTS[control.key])
+    .map((control) => `${control.label}${formatSignedValue(customAdjustments[control.key])}`);
+  return active.length ? active.join("、") : "无微调";
+}
+
+for (const control of ADJUSTMENT_CONTROLS) {
+  control.slider?.addEventListener("input", () => {
+    syncCustomAdjustmentOutputs();
+    setStatus(`已调整${control.label}为 ${formatSignedValue(customAdjustments[control.key])}。如需应用到当前图片，请点“重新用当前强度处理”。`);
+  });
+}
+
+resetAdjustmentsButton?.addEventListener("click", () => {
+  for (const control of ADJUSTMENT_CONTROLS) {
+    if (!control.slider) continue;
+    control.slider.value = String(CUSTOM_ADJUSTMENT_DEFAULTS[control.key]);
+  }
+  syncCustomAdjustmentOutputs();
+  setStatus("已重置自定义微调参数。如需应用到当前图片，请重新处理当前图片或应用到全部照片。");
+});
+
+syncCustomAdjustmentOutputs();
 
 reprocessButton.addEventListener("click", async () => {
   if (!selectedItem || selectedItem.kind !== "image") return;
@@ -363,7 +446,7 @@ async function processFile(file, index, total) {
   const sourcePreviewUrlForItem = await createPreviewUrl(sourceCanvas);
 
   setStatus(`正在调色第 ${index + 1} / ${total} 张：${file.name}`);
-  applyCreamPreset(sourceCanvas, resultCanvas, presetStrength);
+  const exposureInfo = renderAdjustedImage(sourceCanvas, resultCanvas, { updateNotice: true });
   resultCard.classList.add("has-image");
   resultCard.classList.remove("has-video");
   videoPreview.removeAttribute("src");
@@ -382,6 +465,7 @@ async function processFile(file, index, total) {
     url,
     previewUrl,
     sourcePreviewUrl: sourcePreviewUrlForItem,
+    exposureInfo,
     name: outputName,
     type: "image/jpeg",
     kind: "image",
@@ -787,6 +871,7 @@ function selectBatchItem(item, article) {
     videoPreview.preload = "metadata";
     compareButton.disabled = true;
     reprocessButton.disabled = true;
+    hideExposureNotice();
     updateApplyAllButton();
     compareButton.textContent = "按住看原图";
     updatePreviewNavButtons();
@@ -802,6 +887,7 @@ function selectBatchItem(item, article) {
   resultPreview.src = item.previewUrl;
   compareButton.disabled = !item.sourcePreviewUrl;
   reprocessButton.disabled = !item.sourceFile;
+  updateExposureNotice(item.exposureInfo);
   updateApplyAllButton();
   compareButton.textContent = "按住看原图";
   updatePreviewNavButtons();
@@ -863,7 +949,7 @@ async function reprocessSelectedImage() {
 
   try {
     await updateImageItemWithCurrentSettings(item);
-    setStatus(`第 ${item.index} 张已按 ${strengthSlider.value}% 强度重新处理。`);
+    setStatus(`第 ${item.index} 张已按 ${strengthSlider.value}% 强度重新处理，自定义微调：${getCustomAdjustmentStatusText()}。`);
   } catch (error) {
     console.error(error);
     setStatus(error.message || "重新处理失败，请再试一次。");
@@ -905,7 +991,7 @@ async function applyCurrentSettingsToAllImages() {
     }
 
     const totalSize = batchItems.reduce((sum, item) => sum + item.blob.size, 0);
-    setStatus(`已用当前色调和 ${strengthSlider.value}% 强度应用到 ${successCount} 张照片。输出合计 ${formatBytes(totalSize)}。`);
+    setStatus(`已用当前色调、${strengthSlider.value}% 强度和自定义微调应用到 ${successCount} 张照片。输出合计 ${formatBytes(totalSize)}。`);
   } catch (error) {
     console.error(error);
     setStatus(error.message || "应用到全部照片失败，请再试一次。");
@@ -924,7 +1010,9 @@ async function updateImageItemWithCurrentSettings(item, options = {}) {
   const size = fitSize(bitmap.width, bitmap.height, MAX_EXPORT_EDGE);
   drawSource(bitmap, size.width, size.height);
 
-  applyCreamPreset(sourceCanvas, resultCanvas, presetStrength);
+  const exposureInfo = renderAdjustedImage(sourceCanvas, resultCanvas, {
+    updateNotice: options.updatePreview !== false && item === selectedItem,
+  });
 
   const blob = await canvasToBlob(resultCanvas, "image/jpeg", JPEG_QUALITY);
   const nextUrl = URL.createObjectURL(blob);
@@ -939,6 +1027,7 @@ async function updateImageItemWithCurrentSettings(item, options = {}) {
   item.outputSize = blob.size;
   item.outputWidth = size.width;
   item.outputHeight = size.height;
+  item.exposureInfo = exposureInfo;
 
   if (item.thumbElement) item.thumbElement.src = nextPreviewUrl;
   if (item.infoElement) item.infoElement.textContent = getBatchItemInfoText(item);
@@ -1272,6 +1361,7 @@ function createVideoFilter(strength) {
     return [
       `eq=brightness=${brightness}:contrast=${contrast}:saturation=${saturation}:gamma=${gamma}`,
       `colorbalance=rs=${rs}:gs=${gs}:bs=${bs}:rm=${rs}:gm=${gs}:bm=${bs}`,
+      ...createCustomVideoFilters(),
     ].join(",");
   }
 
@@ -1294,7 +1384,26 @@ function createVideoFilter(strength) {
     `eq=brightness=${brightness}:contrast=${contrast}:saturation=${saturation}:gamma=${gamma}`,
     `colorbalance=rs=${rs}:gs=${gs}:bs=${bs}:rm=${rm}:gm=${gm}:bm=${bm}`,
     `curves=all='0/0 0.25/${mid1} 0.65/${mid2} 0.9/${high} 1/${white}'`,
+    ...createCustomVideoFilters(),
   ].join(",");
+}
+
+function createCustomVideoFilters() {
+  if (!hasCustomAdjustments()) return [];
+
+  const brightness = ((customAdjustments.brightness / 100) * 0.18 + (customAdjustments.shadows / 100) * 0.05).toFixed(4);
+  const saturation = Math.max(0.1, 1 + customAdjustments.saturation / 100).toFixed(4);
+  const gamma = Math.max(0.1, 1 - (customAdjustments.highlights / 100) * 0.18).toFixed(4);
+  const temperature = (customAdjustments.temperature / 100) * 0.055;
+  const filters = [`eq=brightness=${brightness}:saturation=${saturation}:gamma=${gamma}`];
+
+  if (Math.abs(temperature) > 0.0001) {
+    const rs = temperature.toFixed(4);
+    const bs = (-temperature).toFixed(4);
+    filters.push(`colorbalance=rs=${rs}:bs=${bs}:rm=${rs}:bm=${bs}`);
+  }
+
+  return filters;
 }
 
 async function safeDeleteFfmpegFile(ffmpeg, fileName) {
@@ -1319,7 +1428,11 @@ function waitForVideoMetadata(video) {
 
 function drawVideoFrame(video, sourceContext, size) {
   sourceContext.drawImage(video, 0, 0, size.width, size.height);
-  applyCreamPreset(sourceCanvas, resultCanvas, presetStrength);
+  renderAdjustedImage(sourceCanvas, resultCanvas, {
+    updateNotice: false,
+    protectHighlights: false,
+    skipClarity: true,
+  });
 }
 
 function getVideoStartTime(video) {
@@ -1452,6 +1565,223 @@ function drawSource(image, width, height) {
   context.drawImage(image, 0, 0, width, height);
 
   sourceCard.classList.add("has-image");
+}
+
+
+function renderAdjustedImage(source, target, options = {}) {
+  applyCreamPreset(source, target, presetStrength);
+  applyCustomAdjustmentsToCanvas(target, { skipClarity: options.skipClarity });
+
+  const exposureInfo = options.protectHighlights === false
+    ? analyzeCanvasExposure(target)
+    : analyzeAndProtectHighlights(target);
+
+  if (options.updateNotice) {
+    updateExposureNotice(exposureInfo);
+  }
+
+  return exposureInfo;
+}
+
+function applyCustomAdjustmentsToCanvas(canvas, options = {}) {
+  if (!hasCustomAdjustments() || !canvas.width || !canvas.height) return;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const width = canvas.width;
+  const height = canvas.height;
+  const total = width * height;
+  const clarityAmount = options.skipClarity ? 0 : customAdjustments.clarity / 100;
+  let lumaMap = null;
+  let blurredLuma = null;
+
+  if (clarityAmount > 0.001 && total > 0) {
+    lumaMap = new Float32Array(total);
+    for (let p = 0, i = 0; p < total; p += 1, i += 4) {
+      lumaMap[p] = getLuma(data[i] / 255, data[i + 1] / 255, data[i + 2] / 255);
+    }
+    blurredLuma = blurFloatMap(lumaMap, width, height, 2);
+  }
+
+  const brightnessShift = (customAdjustments.brightness / 100) * 0.28;
+  const highlightShift = (customAdjustments.highlights / 100) * 0.34;
+  const shadowShift = (customAdjustments.shadows / 100) * 0.30;
+  const temperatureShift = (customAdjustments.temperature / 100) * 0.055;
+  const saturationShift = customAdjustments.saturation / 100;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const pixel = i / 4;
+    let r = data[i] / 255;
+    let g = data[i + 1] / 255;
+    let b = data[i + 2] / 255;
+    const luma = getLuma(r, g, b);
+    const highlightMask = smoothstep(0.56, 0.98, luma);
+    const strongHighlightMask = smoothstep(0.80, 0.995, luma);
+    const shadowMask = 1 - smoothstep(0.08, 0.48, luma);
+
+    const lumaShift = brightnessShift + highlightShift * highlightMask + shadowShift * shadowMask;
+    const targetLuma = clamp01(luma + lumaShift * (1 - strongHighlightMask * 0.34));
+    [r, g, b] = shiftRgbToLuma(r, g, b, targetLuma);
+
+    if (Math.abs(temperatureShift) > 0.0001) {
+      const whiteProtection = strongHighlightMask * 0.45;
+      const colorAmount = 1 - whiteProtection;
+      r = clamp01(r + temperatureShift * colorAmount);
+      b = clamp01(b - temperatureShift * colorAmount);
+      g = clamp01(g + temperatureShift * 0.12 * colorAmount);
+    }
+
+    if (Math.abs(saturationShift) > 0.0001) {
+      const hsl = rgbToHsl(r, g, b);
+      const neutralWhiteMask = (1 - smoothstep(0.025, 0.18, hsl.s)) * smoothstep(0.62, 0.98, luma);
+      const saturationAmount = saturationShift * (1 - neutralWhiteMask * 0.72) * (1 - strongHighlightMask * 0.32);
+      hsl.s = clamp01(hsl.s * (1 + saturationAmount));
+      [r, g, b] = hslToRgb(hsl.h, hsl.s, hsl.l);
+    }
+
+    if (clarityAmount > 0.001 && lumaMap && blurredLuma) {
+      const localDetail = lumaMap[pixel] - blurredLuma[pixel];
+      const clarityMask = (1 - strongHighlightMask * 0.68) * (1 - shadowMask * 0.25);
+      const detailBoost = clampRange(localDetail * clarityAmount * 1.45 * clarityMask, -0.05, 0.05);
+      [r, g, b] = shiftRgbToLuma(r, g, b, clamp01(getLuma(r, g, b) + detailBoost));
+    }
+
+    data[i] = toByte(r);
+    data[i + 1] = toByte(g);
+    data[i + 2] = toByte(b);
+  }
+
+  context.putImageData(imageData, 0, 0);
+}
+
+function analyzeAndProtectHighlights(canvas) {
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const before = analyzeExposureData(imageData.data);
+
+  if (before.level === "ok") {
+    return {
+      level: "ok",
+      protected: false,
+      before,
+      after: before,
+      message: "防过曝检测：高光正常。",
+    };
+  }
+
+  const strength = before.level === "risk" ? 0.68 : 0.46;
+  applySoftHighlightGuardToImageData(imageData, strength);
+  const after = analyzeExposureData(imageData.data);
+  context.putImageData(imageData, 0, 0);
+
+  return {
+    level: before.level,
+    protected: true,
+    before,
+    after,
+    message: before.level === "risk"
+      ? "防过曝检测：检测到高光过亮，已自动压住白色区域。仍建议把高光或调色强度稍微调低。"
+      : "防过曝检测：检测到轻微高光风险，已自动做柔和高光保护。",
+  };
+}
+
+function analyzeCanvasExposure(canvas) {
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const stats = analyzeExposureData(imageData.data);
+  return {
+    level: stats.level,
+    protected: false,
+    before: stats,
+    after: stats,
+    message: stats.level === "ok" ? "防过曝检测：高光正常。" : "防过曝检测：检测到高光偏亮。",
+  };
+}
+
+function analyzeExposureData(data) {
+  const pixelCount = data.length / 4;
+  const pixelStep = Math.max(1, Math.floor(pixelCount / 120000));
+  const byteStep = pixelStep * 4;
+  let samples = 0;
+  let clipped = 0;
+  let nearWhite = 0;
+  let bright = 0;
+
+  for (let i = 0; i < data.length; i += byteStep) {
+    const r = data[i] / 255;
+    const g = data[i + 1] / 255;
+    const b = data[i + 2] / 255;
+    const luma = getLuma(r, g, b);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const colorfulness = max - min;
+
+    samples += 1;
+    if (luma > 0.985 || (max > 0.995 && min > 0.92)) clipped += 1;
+    if (luma > 0.94 && colorfulness < 0.16) nearWhite += 1;
+    if (luma > 0.90) bright += 1;
+  }
+
+  const clippedRatio = samples ? clipped / samples : 0;
+  const nearWhiteRatio = samples ? nearWhite / samples : 0;
+  const brightRatio = samples ? bright / samples : 0;
+  const riskScore = clippedRatio * 2.4 + nearWhiteRatio * 0.95 + brightRatio * 0.28;
+  const level = riskScore > 0.17 || clippedRatio > 0.018
+    ? "risk"
+    : riskScore > 0.085 || clippedRatio > 0.006
+      ? "warning"
+      : "ok";
+
+  return {
+    level,
+    clippedRatio,
+    nearWhiteRatio,
+    brightRatio,
+    riskScore,
+  };
+}
+
+function applySoftHighlightGuardToImageData(imageData, strength) {
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i] / 255;
+    let g = data[i + 1] / 255;
+    let b = data[i + 2] / 255;
+    const luma = getLuma(r, g, b);
+    const highlightMask = smoothstep(0.78, 1, luma);
+    if (highlightMask <= 0) continue;
+
+    const shoulder = 0.90;
+    const compressedLuma = shoulder + (luma - shoulder) * mix(1, 0.56, highlightMask * strength);
+    const cappedLuma = Math.min(0.968, compressedLuma);
+    const targetLuma = mix(luma, cappedLuma, highlightMask * strength);
+    [r, g, b] = shiftRgbToLuma(r, g, b, targetLuma);
+
+    data[i] = toByte(r);
+    data[i + 1] = toByte(g);
+    data[i + 2] = toByte(b);
+  }
+}
+
+function updateExposureNotice(info) {
+  if (!exposureNotice) return;
+  if (!info) {
+    hideExposureNotice();
+    return;
+  }
+
+  exposureNotice.hidden = false;
+  exposureNotice.classList.toggle("is-ok", info.level === "ok");
+  exposureNotice.classList.toggle("is-warning", info.level !== "ok");
+  exposureNotice.textContent = info.message;
+}
+
+function hideExposureNotice() {
+  if (!exposureNotice) return;
+  exposureNotice.hidden = true;
+  exposureNotice.textContent = "";
+  exposureNotice.classList.remove("is-ok", "is-warning");
 }
 
 function applyCreamPreset(source, target, strengthAmount = 1) {
@@ -2203,6 +2533,7 @@ function resetOutput() {
   prevItemButton.disabled = true;
   nextItemButton.disabled = true;
   compareButton.textContent = "按住看原图";
+  hideExposureNotice();
   sourceCard.classList.remove("has-image");
   resultCard.classList.remove("has-image");
   resultCard.classList.remove("has-video");
@@ -2258,10 +2589,82 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch((error) => {
-      console.warn("Service worker registration failed:", error);
+function maybeShowInstallTip() {
+  if (!installTip) return;
+
+  const isStandalone = window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone;
+  const dismissed = readLocalSetting("creamInstallTipDismissed") === "1";
+  const isTouchDevice = window.matchMedia?.("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+
+  if (!isStandalone && !dismissed && isTouchDevice) {
+    installTip.hidden = false;
+  }
+}
+
+function readLocalSetting(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeLocalSetting(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (error) {
+    console.warn("Local setting skipped:", key, error);
+  }
+}
+
+installTipClose?.addEventListener("click", () => {
+  writeLocalSetting("creamInstallTipDismissed", "1");
+  if (installTip) installTip.hidden = true;
+});
+
+function showUpdatePrompt(worker) {
+  waitingServiceWorker = worker || waitingServiceWorker;
+  if (updatePrompt) updatePrompt.hidden = false;
+}
+
+refreshAppButton?.addEventListener("click", () => {
+  if (waitingServiceWorker) {
+    waitingServiceWorker.postMessage({ type: "SKIP_WAITING" });
+    return;
+  }
+  window.location.reload();
+});
+
+function registerServiceWorkerForUpdates() {
+  if (!("serviceWorker" in navigator) || !location.protocol.startsWith("http")) return;
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshingForUpdate) return;
+    refreshingForUpdate = true;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker.register("sw.js").then((registration) => {
+    if (registration.waiting && navigator.serviceWorker.controller) {
+      showUpdatePrompt(registration.waiting);
+    }
+
+    registration.addEventListener("updatefound", () => {
+      const newWorker = registration.installing;
+      if (!newWorker) return;
+
+      newWorker.addEventListener("statechange", () => {
+        if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+          showUpdatePrompt(newWorker);
+        }
+      });
     });
+  }).catch((error) => {
+    console.warn("Service worker registration failed:", error);
   });
 }
+
+window.addEventListener("load", () => {
+  maybeShowInstallTip();
+  registerServiceWorkerForUpdates();
+});

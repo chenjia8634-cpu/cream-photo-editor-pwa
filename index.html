@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="奶油调色">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>奶油感产品图自动调色工具 v3.18</title>
+    <title>奶油感产品图自动调色工具 v3.19</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
   </head>
@@ -15,7 +15,7 @@
     <main class="app-shell">
       <header class="app-header">
         <p class="eyebrow">本地浏览器处理 · 不上传照片</p>
-        <h1>奶油感产品图自动调色工具 <span class="version-badge">v3.18</span></h1>
+        <h1>奶油感产品图自动调色工具 <span class="version-badge">v3.19</span></h1>
         <button id="changelogButton" class="text-link-button" type="button">更新日志</button>
       </header>
 
@@ -44,6 +44,52 @@
           <output id="strengthValue" for="strengthSlider">100%</output>
         </div>
         <input id="strengthSlider" class="strength-slider" type="range" min="0" max="100" step="5" value="100">
+
+        <details class="advanced-panel" id="advancedAdjustPanel">
+          <summary>自定义微调参数</summary>
+          <p class="advanced-hint">在当前调色风格基础上二次微调，适合最后修亮度、高光、阴影和色温。</p>
+          <div class="adjustment-group">
+            <div class="adjustment-row">
+              <label for="brightnessSlider">亮度</label>
+              <output id="brightnessValue" for="brightnessSlider">0</output>
+            </div>
+            <input id="brightnessSlider" class="adjustment-slider" type="range" min="-30" max="30" step="1" value="0">
+
+            <div class="adjustment-row">
+              <label for="highlightsSlider">高光</label>
+              <output id="highlightsValue" for="highlightsSlider">0</output>
+            </div>
+            <input id="highlightsSlider" class="adjustment-slider" type="range" min="-50" max="30" step="1" value="0">
+
+            <div class="adjustment-row">
+              <label for="shadowsSlider">阴影</label>
+              <output id="shadowsValue" for="shadowsSlider">0</output>
+            </div>
+            <input id="shadowsSlider" class="adjustment-slider" type="range" min="-30" max="50" step="1" value="0">
+
+            <div class="adjustment-row">
+              <label for="temperatureSlider">色温</label>
+              <output id="temperatureValue" for="temperatureSlider">0</output>
+            </div>
+            <input id="temperatureSlider" class="adjustment-slider" type="range" min="-30" max="30" step="1" value="0">
+
+            <div class="adjustment-row">
+              <label for="saturationSlider">饱和度</label>
+              <output id="saturationValue" for="saturationSlider">0</output>
+            </div>
+            <input id="saturationSlider" class="adjustment-slider" type="range" min="-40" max="40" step="1" value="0">
+
+            <div class="adjustment-row">
+              <label for="claritySlider">清晰度</label>
+              <output id="clarityValue" for="claritySlider">0</output>
+            </div>
+            <input id="claritySlider" class="adjustment-slider" type="range" min="0" max="30" step="1" value="0">
+          </div>
+          <button id="resetAdjustmentsButton" class="small-action-button subtle-button" type="button">重置微调参数</button>
+        </details>
+
+        <div id="exposureNotice" class="exposure-notice" aria-live="polite" hidden></div>
+
         <div class="control-actions">
           <button id="reprocessButton" class="small-action-button" type="button" disabled>重新用当前强度处理</button>
           <button id="applyAllButton" class="small-action-button" type="button" disabled>应用到全部照片</button>
@@ -53,6 +99,19 @@
 
       <section id="statusPanel" class="status-panel" aria-live="polite">
         <span id="statusText">请选择一张照片开始调色。</span>
+      </section>
+
+      <section id="installTip" class="install-tip" hidden>
+        <div>
+          <strong>建议添加到主屏幕</strong>
+          <p>在 iPhone Safari 打开后点分享按钮，再选“添加到主屏幕”，下次就能像 App 一样打开。</p>
+        </div>
+        <button id="installTipClose" class="tip-close" type="button">知道了</button>
+      </section>
+
+      <section id="updatePrompt" class="update-prompt" hidden>
+        <span>发现新版本，点击刷新后即可使用最新功能。</span>
+        <button id="refreshAppButton" class="tip-close" type="button">刷新</button>
       </section>
 
       <section class="preview-grid" aria-label="调色预览">

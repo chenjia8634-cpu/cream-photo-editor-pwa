@@ -1,4 +1,4 @@
-const CACHE_NAME = "cream-photo-editor-v38-changelog-fix";
+const CACHE_NAME = "cream-photo-editor-v39-custom-exposure";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -12,7 +12,6 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -26,6 +25,12 @@ self.addEventListener("activate", (event) => {
     )
   );
   self.clients.claim();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
