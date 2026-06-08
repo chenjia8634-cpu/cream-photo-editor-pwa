@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="奶油调色">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>奶油感产品图自动调色工具 v3.19</title>
+    <title>奶油感产品图自动调色工具 v3.20</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
   </head>
@@ -15,8 +15,11 @@
     <main class="app-shell">
       <header class="app-header">
         <p class="eyebrow">本地浏览器处理 · 不上传照片</p>
-        <h1>奶油感产品图自动调色工具 <span class="version-badge">v3.19</span></h1>
-        <button id="changelogButton" class="text-link-button" type="button">更新日志</button>
+        <h1>奶油感产品图自动调色工具 <span class="version-badge">v3.20</span></h1>
+        <div class="header-actions">
+          <button id="changelogButton" class="text-link-button" type="button">更新日志</button>
+          <button id="checkUpdateButton" class="text-link-button" type="button">检查更新</button>
+        </div>
       </header>
 
       <section class="panel upload-panel" aria-label="上传照片">
@@ -39,6 +42,21 @@
           <option value="pink_brown_home_kawaii">粉棕居家玩偶感</option>
           <option value="universal_food">万能美食调色</option>
         </select>
+
+        <div class="custom-preset-panel">
+          <div class="control-row">
+            <label for="customPresetSelect">我的预设</label>
+          </div>
+          <select id="customPresetSelect" class="preset-select custom-preset-select">
+            <option value="">未选择自定义预设</option>
+          </select>
+          <div class="custom-preset-actions">
+            <button id="saveCustomPresetButton" class="small-action-button subtle-button" type="button">保存当前为预设</button>
+            <button id="deleteCustomPresetButton" class="small-action-button subtle-button" type="button" disabled>删除所选预设</button>
+          </div>
+          <p class="custom-preset-hint">会保存当前调色风格、强度和全部微调参数，只保存在本机浏览器里。</p>
+        </div>
+
         <div class="control-row">
           <label for="strengthSlider">调色强度</label>
           <output id="strengthValue" for="strengthSlider">100%</output>
@@ -94,7 +112,7 @@
           <button id="reprocessButton" class="small-action-button" type="button" disabled>重新用当前强度处理</button>
           <button id="applyAllButton" class="small-action-button" type="button" disabled>应用到全部照片</button>
         </div>
-        <p class="control-hint">调完强度或色调后，可重新生成当前图片，也可以应用到全部照片。</p>
+        <p class="control-hint">拖动强度或微调参数后会自动预览当前图片；需要批量同步时再点“应用到全部照片”。</p>
       </section>
 
       <section id="statusPanel" class="status-panel" aria-live="polite">
@@ -103,14 +121,14 @@
 
       <section id="installTip" class="install-tip" hidden>
         <div>
-          <strong>建议添加到主屏幕</strong>
-          <p>在 iPhone Safari 打开后点分享按钮，再选“添加到主屏幕”，下次就能像 App 一样打开。</p>
+          <strong id="installTipTitle">建议添加到主屏幕</strong>
+          <p id="installTipText">在 iPhone Safari 打开后点分享按钮，再选“添加到主屏幕”，下次就能像 App 一样打开。</p>
         </div>
         <button id="installTipClose" class="tip-close" type="button">知道了</button>
       </section>
 
       <section id="updatePrompt" class="update-prompt" hidden>
-        <span>发现新版本，点击刷新后即可使用最新功能。</span>
+        <span id="updatePromptText">发现新版本，点击刷新后即可使用最新功能。</span>
         <button id="refreshAppButton" class="tip-close" type="button">刷新</button>
       </section>
 

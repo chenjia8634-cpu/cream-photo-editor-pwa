@@ -24,8 +24,12 @@ const currentIndexBadge = document.querySelector("#currentIndexBadge");
 const prevItemButton = document.querySelector("#prevItemButton");
 const nextItemButton = document.querySelector("#nextItemButton");
 const changelogButton = document.querySelector("#changelogButton");
+const checkUpdateButton = document.querySelector("#checkUpdateButton");
 const changelogDialog = document.querySelector("#changelogDialog");
 const changelogList = document.querySelector("#changelogList");
+const customPresetSelect = document.querySelector("#customPresetSelect");
+const saveCustomPresetButton = document.querySelector("#saveCustomPresetButton");
+const deleteCustomPresetButton = document.querySelector("#deleteCustomPresetButton");
 const brightnessSlider = document.querySelector("#brightnessSlider");
 const brightnessValue = document.querySelector("#brightnessValue");
 const highlightsSlider = document.querySelector("#highlightsSlider");
@@ -41,13 +45,16 @@ const clarityValue = document.querySelector("#clarityValue");
 const resetAdjustmentsButton = document.querySelector("#resetAdjustmentsButton");
 const exposureNotice = document.querySelector("#exposureNotice");
 const installTip = document.querySelector("#installTip");
+const installTipTitle = document.querySelector("#installTipTitle");
+const installTipText = document.querySelector("#installTipText");
 const installTipClose = document.querySelector("#installTipClose");
 const updatePrompt = document.querySelector("#updatePrompt");
+const updatePromptText = document.querySelector("#updatePromptText");
 const refreshAppButton = document.querySelector("#refreshAppButton");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.19";
+const APP_VERSION = "v3.20";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -69,7 +76,14 @@ const CUSTOM_ADJUSTMENT_DEFAULTS = {
 };
 
 const customAdjustments = { ...CUSTOM_ADJUSTMENT_DEFAULTS };
+const CUSTOM_PRESETS_STORAGE_KEY = "creamCustomPresetsV1";
+const INSTALL_TIP_DISMISS_KEY = `creamInstallTipDismissed-${APP_VERSION}`;
+const AUTO_PREVIEW_DELAY_MS = 520;
 
+let autoPreviewTimer = 0;
+let autoPreviewQueued = false;
+let autoPreviewRunning = false;
+let activeServiceWorkerRegistration = null;
 let waitingServiceWorker = null;
 let refreshingForUpdate = false;
 let ffmpegInstance = null;
@@ -224,6 +238,7 @@ const CHANGELOG = [
   ["v3.17", "\u4f18\u5316\u9884\u89c8\u4e0a\u4e00\u5f20\u002f\u4e0b\u4e00\u5f20\u6309\u94ae\uff0c\u51cf\u5c11\u0020\u0069\u0050\u0068\u006f\u006e\u0065\u0020\u8fde\u70b9\u89e6\u53d1\u9875\u9762\u53cc\u51fb\u653e\u5927\uff1b\u9009\u62e9\u4e07\u80fd\u7f8e\u98df\u8c03\u8272\u65f6\u9ed8\u8ba4\u5207\u5230\u0020\u0036\u0030\u0025\u0020\u5f3a\u5ea6\u3002"],
   ["v3.18", "\u56fa\u5b9a\u9884\u89c8\u4e0a\u4e00\u5f20\u002f\u4e0b\u4e00\u5f20\u6309\u94ae\u4f4d\u7f6e\uff0c\u7981\u7528\u65f6\u4fdd\u7559\u5360\u4f4d\u4f46\u4e0d\u663e\u793a\uff0c\u907f\u514d\u7b2c\u4e00\u5f20\u548c\u6700\u540e\u4e00\u5f20\u7684\u7ffb\u9875\u6309\u94ae\u5de6\u53f3\u8df3\u52a8\u3002"],
   ["v3.19", "增加自定义微调参数、防过曝检测与自动高光保护，并增加添加到主屏幕提示和发现新版本后的刷新提示。"],
+  ["v3.20", "增加自定义微调自动预览、浏览器本地保存自定义预设、手动检查更新和更清晰的新版本刷新提示，并优化 iPhone Safari 与微信内打开时的添加到主屏幕提示逻辑。"],
 ];
 
 function setPresetStrength(percent) {
@@ -241,12 +256,14 @@ function applyPresetDefaultStrength() {
 presetSelect.addEventListener("change", () => {
   activePresetId = presetSelect.value;
   applyPresetDefaultStrength();
-  const presetName = COLOR_PRESETS[activePresetId]?.name || "\u5f53\u524d\u98ce\u683c";
-  setStatus(`\u5df2\u5207\u6362\u5230\u300c${presetName}\u300d\uff0c\u5f53\u524d\u5f3a\u5ea6 ${strengthSlider.value}%\u3002\u5982\u9700\u5e94\u7528\u5230\u5f53\u524d\u56fe\u7247\uff0c\u8bf7\u70b9\u91cd\u65b0\u7528\u5f53\u524d\u5f3a\u5ea6\u5904\u7406\u3002`);
+  const presetName = COLOR_PRESETS[activePresetId]?.name || "当前风格";
+  setStatus(`已切换到「${presetName}」，当前强度 ${strengthSlider.value}%。正在自动预览当前图片。`);
+  scheduleAutoPreview("已切换调色风格，正在自动预览当前图片。");
 });
 
 strengthSlider.addEventListener("input", () => {
   setPresetStrength(strengthSlider.value);
+  scheduleAutoPreview(`已调整调色强度为 ${strengthSlider.value}%，正在自动预览当前图片。`);
 });
 
 const ADJUSTMENT_CONTROLS = [
@@ -285,7 +302,7 @@ function getCustomAdjustmentStatusText() {
 for (const control of ADJUSTMENT_CONTROLS) {
   control.slider?.addEventListener("input", () => {
     syncCustomAdjustmentOutputs();
-    setStatus(`已调整${control.label}为 ${formatSignedValue(customAdjustments[control.key])}。如需应用到当前图片，请点“重新用当前强度处理”。`);
+    scheduleAutoPreview(`已调整${control.label}为 ${formatSignedValue(customAdjustments[control.key])}，正在自动预览当前图片。`);
   });
 }
 
@@ -295,17 +312,145 @@ resetAdjustmentsButton?.addEventListener("click", () => {
     control.slider.value = String(CUSTOM_ADJUSTMENT_DEFAULTS[control.key]);
   }
   syncCustomAdjustmentOutputs();
-  setStatus("已重置自定义微调参数。如需应用到当前图片，请重新处理当前图片或应用到全部照片。");
+  scheduleAutoPreview("已重置自定义微调参数，正在自动预览当前图片。");
+});
+
+function readCustomPresets() {
+  const raw = readLocalSetting(CUSTOM_PRESETS_STORAGE_KEY);
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((preset) => preset && typeof preset.id === "string" && typeof preset.name === "string")
+      .map((preset) => ({
+        id: preset.id,
+        name: preset.name.slice(0, 28),
+        presetId: COLOR_PRESETS[preset.presetId] ? preset.presetId : "cream_product",
+        strengthPercent: clampRange(Number(preset.strengthPercent) || 100, 0, 100),
+        adjustments: {
+          ...CUSTOM_ADJUSTMENT_DEFAULTS,
+          ...(preset.adjustments || {}),
+        },
+      }));
+  } catch (error) {
+    console.warn("Custom preset read failed:", error);
+    return [];
+  }
+}
+
+function writeCustomPresets(presets) {
+  writeLocalSetting(CUSTOM_PRESETS_STORAGE_KEY, JSON.stringify(presets.slice(0, 30)));
+}
+
+function renderCustomPresetOptions(selectedId = customPresetSelect?.value || "") {
+  if (!customPresetSelect) return;
+  const presets = readCustomPresets();
+  customPresetSelect.textContent = "";
+
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = presets.length ? "选择一个自定义预设" : "暂无自定义预设";
+  customPresetSelect.append(emptyOption);
+
+  for (const preset of presets) {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = preset.name;
+    customPresetSelect.append(option);
+  }
+
+  customPresetSelect.value = presets.some((preset) => preset.id === selectedId) ? selectedId : "";
+  updateCustomPresetButtons();
+}
+
+function updateCustomPresetButtons() {
+  if (deleteCustomPresetButton) {
+    deleteCustomPresetButton.disabled = !customPresetSelect?.value;
+  }
+}
+
+function getCurrentSettingsSnapshot(name) {
+  return {
+    id: `custom-${Date.now()}`,
+    name,
+    presetId: activePresetId,
+    strengthPercent: Number(strengthSlider.value) || 100,
+    adjustments: { ...customAdjustments },
+  };
+}
+
+function applyCustomPresetSnapshot(snapshot) {
+  activePresetId = COLOR_PRESETS[snapshot.presetId] ? snapshot.presetId : "cream_product";
+  presetSelect.value = activePresetId;
+  setPresetStrength(snapshot.strengthPercent);
+
+  for (const control of ADJUSTMENT_CONTROLS) {
+    if (!control.slider) continue;
+    const nextValue = Number(snapshot.adjustments?.[control.key]);
+    control.slider.value = String(Number.isFinite(nextValue) ? nextValue : CUSTOM_ADJUSTMENT_DEFAULTS[control.key]);
+  }
+
+  syncCustomAdjustmentOutputs();
+}
+
+customPresetSelect?.addEventListener("change", () => {
+  updateCustomPresetButtons();
+  const preset = readCustomPresets().find((item) => item.id === customPresetSelect.value);
+  if (!preset) return;
+
+  applyCustomPresetSnapshot(preset);
+  setStatus(`已套用自定义预设「${preset.name}」，正在自动预览当前图片。`);
+  scheduleAutoPreview(`已套用自定义预设「${preset.name}」，正在自动预览当前图片。`);
+});
+
+saveCustomPresetButton?.addEventListener("click", () => {
+  const presetName = window.prompt("给这个自定义预设起个名字", `${COLOR_PRESETS[activePresetId]?.name || "我的预设"} ${strengthSlider.value}%`);
+  const trimmedName = presetName?.trim();
+  if (!trimmedName) return;
+
+  const presets = readCustomPresets();
+  const nextPreset = getCurrentSettingsSnapshot(trimmedName.slice(0, 28));
+  const existingIndex = presets.findIndex((preset) => preset.name === nextPreset.name);
+  if (existingIndex >= 0) {
+    nextPreset.id = presets[existingIndex].id;
+    presets[existingIndex] = nextPreset;
+  } else {
+    presets.unshift(nextPreset);
+  }
+
+  writeCustomPresets(presets);
+  renderCustomPresetOptions(nextPreset.id);
+  setStatus(`已保存自定义预设「${nextPreset.name}」。`);
+});
+
+deleteCustomPresetButton?.addEventListener("click", () => {
+  const presetId = customPresetSelect?.value;
+  if (!presetId) return;
+
+  const presets = readCustomPresets();
+  const preset = presets.find((item) => item.id === presetId);
+  const confirmed = window.confirm(`删除自定义预设「${preset?.name || "未命名"}」吗？`);
+  if (!confirmed) return;
+
+  writeCustomPresets(presets.filter((item) => item.id !== presetId));
+  renderCustomPresetOptions("");
+  setStatus("已删除所选自定义预设。");
 });
 
 syncCustomAdjustmentOutputs();
+renderCustomPresetOptions();
 
 reprocessButton.addEventListener("click", async () => {
   if (!selectedItem || selectedItem.kind !== "image") return;
+  cancelPendingAutoPreview();
   await reprocessSelectedImage();
 });
 
 applyAllButton.addEventListener("click", async () => {
+  cancelPendingAutoPreview();
   await applyCurrentSettingsToAllImages();
 });
 
@@ -935,6 +1080,63 @@ function getBatchItemInfoText(item) {
   return `${typeText} ${item.outputWidth}×${item.outputHeight} / ${formatBytes(item.outputSize)}${audioText}`;
 }
 
+function canAutoPreviewCurrentImage() {
+  return Boolean(selectedItem && selectedItem.kind === "image" && selectedItem.sourceFile);
+}
+
+function scheduleAutoPreview(message) {
+  if (!canAutoPreviewCurrentImage()) {
+    if (message) setStatus(message.replace("正在自动预览当前图片。", "上传图片后会自动预览。"));
+    return;
+  }
+
+  window.clearTimeout(autoPreviewTimer);
+  autoPreviewQueued = true;
+  if (message) setStatus(message);
+  autoPreviewTimer = window.setTimeout(runQueuedAutoPreview, AUTO_PREVIEW_DELAY_MS);
+}
+
+function cancelPendingAutoPreview() {
+  window.clearTimeout(autoPreviewTimer);
+  autoPreviewQueued = false;
+}
+
+async function runQueuedAutoPreview() {
+  if (!autoPreviewQueued || autoPreviewRunning) return;
+  autoPreviewRunning = true;
+  reprocessButton.disabled = true;
+  applyAllButton.disabled = true;
+  saveButton.disabled = true;
+  reprocessButton.classList.add("is-processing");
+  reprocessButton.textContent = "正在自动预览...";
+
+  try {
+    while (autoPreviewQueued) {
+      autoPreviewQueued = false;
+      const item = selectedItem;
+      if (!item || item.kind !== "image" || !item.sourceFile) break;
+      setStatus(`正在自动预览第 ${item.index} 张：${item.originalName}`);
+      await updateImageItemWithCurrentSettings(item);
+      setStatus(`已自动预览第 ${item.index} 张。自定义微调：${getCustomAdjustmentStatusText()}。`);
+      await wait(20);
+    }
+  } catch (error) {
+    console.error(error);
+    setStatus(error.message || "自动预览失败，请点“重新用当前强度处理”再试一次。");
+  } finally {
+    autoPreviewRunning = false;
+    reprocessButton.classList.remove("is-processing");
+    reprocessButton.textContent = "重新用当前强度处理";
+    saveButton.disabled = !selectedItem;
+    reprocessButton.disabled = !(selectedItem?.kind === "image" && selectedItem.sourceFile);
+    updateApplyAllButton();
+
+    if (autoPreviewQueued) {
+      autoPreviewTimer = window.setTimeout(runQueuedAutoPreview, 80);
+    }
+  }
+}
+
 async function reprocessSelectedImage() {
   const item = selectedItem;
   if (!item || item.kind !== "image" || !item.sourceFile) return;
@@ -1346,7 +1548,9 @@ function getVideoInputExtension(fileName) {
 
 function createVideoFilter(strength) {
   const amount = clamp01(strength);
-  if (amount <= 0.001) return "null";
+  if (amount <= 0.001) {
+    return createCustomVideoFilters().join(",") || "null";
+  }
 
   const preset = COLOR_PRESETS[activePresetId] || COLOR_PRESETS.cream_product;
   if (preset.mode === "config" || preset.mode === "food") {
@@ -1670,7 +1874,18 @@ function analyzeAndProtectHighlights(canvas) {
     };
   }
 
-  const strength = before.level === "risk" ? 0.68 : 0.46;
+  const shouldProtect = before.clippedRatio > 0.006 || before.level === "risk";
+  if (!shouldProtect) {
+    return {
+      level: "warning",
+      protected: false,
+      before,
+      after: before,
+      message: "防过曝检测：高光偏亮但未发现明显死白，建议需要时把高光稍微调低。",
+    };
+  }
+
+  const strength = before.level === "risk" ? 0.64 : 0.42;
   applySoftHighlightGuardToImageData(imageData, strength);
   const after = analyzeExposureData(imageData.data);
   context.putImageData(imageData, 0, 0);
@@ -1681,7 +1896,7 @@ function analyzeAndProtectHighlights(canvas) {
     before,
     after,
     message: before.level === "risk"
-      ? "防过曝检测：检测到高光过亮，已自动压住白色区域。仍建议把高光或调色强度稍微调低。"
+      ? "防过曝检测：检测到高光过亮，已自动压住接近死白的区域。仍建议把高光或调色强度稍微调低。"
       : "防过曝检测：检测到轻微高光风险，已自动做柔和高光保护。",
   };
 }
@@ -1726,10 +1941,10 @@ function analyzeExposureData(data) {
   const clippedRatio = samples ? clipped / samples : 0;
   const nearWhiteRatio = samples ? nearWhite / samples : 0;
   const brightRatio = samples ? bright / samples : 0;
-  const riskScore = clippedRatio * 2.4 + nearWhiteRatio * 0.95 + brightRatio * 0.28;
-  const level = riskScore > 0.17 || clippedRatio > 0.018
+  const riskScore = clippedRatio * 3.2 + nearWhiteRatio * 0.18 + brightRatio * 0.12;
+  const level = clippedRatio > 0.022 || (clippedRatio > 0.012 && nearWhiteRatio > 0.08)
     ? "risk"
-    : riskScore > 0.085 || clippedRatio > 0.006
+    : clippedRatio > 0.006 || (nearWhiteRatio > 0.34 && brightRatio > 0.52)
       ? "warning"
       : "ok";
 
@@ -2589,16 +2804,44 @@ function formatBytes(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function isStandaloneAppMode() {
+  return Boolean(window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone);
+}
+
+function getBrowserFlags() {
+  const ua = navigator.userAgent || "";
+  const lower = ua.toLowerCase();
+  const isiPadOs = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  const isIOS = /iphone|ipad|ipod/.test(lower) || isiPadOs;
+  const isWechat = /micromessenger/.test(lower);
+  const isCriOS = /crios/.test(lower);
+  const isFxiOS = /fxios/.test(lower);
+  const isEdgiOS = /edgios/.test(lower);
+  const isSafari = isIOS && /safari/.test(lower) && !isWechat && !isCriOS && !isFxiOS && !isEdgiOS;
+  return { isIOS, isWechat, isSafari };
+}
+
 function maybeShowInstallTip() {
-  if (!installTip) return;
+  if (!installTip || isStandaloneAppMode()) return;
 
-  const isStandalone = window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone;
-  const dismissed = readLocalSetting("creamInstallTipDismissed") === "1";
-  const isTouchDevice = window.matchMedia?.("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+  const dismissed = readLocalSetting(INSTALL_TIP_DISMISS_KEY) === "1";
+  if (dismissed) return;
 
-  if (!isStandalone && !dismissed && isTouchDevice) {
-    installTip.hidden = false;
+  const { isIOS, isWechat, isSafari } = getBrowserFlags();
+  if (!isIOS) return;
+
+  if (isWechat) {
+    if (installTipTitle) installTipTitle.textContent = "请先用 Safari 打开";
+    if (installTipText) installTipText.textContent = "微信内置浏览器不能直接添加到主屏幕。请点右上角菜单，选择在 Safari 中打开，再用分享按钮添加到主屏幕。";
+  } else if (isSafari) {
+    if (installTipTitle) installTipTitle.textContent = "建议添加到主屏幕";
+    if (installTipText) installTipText.textContent = "点 Safari 底部分享按钮，再选“添加到主屏幕”，下次就能像 App 一样打开。";
+  } else {
+    if (installTipTitle) installTipTitle.textContent = "建议用 Safari 添加到主屏幕";
+    if (installTipText) installTipText.textContent = "当前浏览器可能不支持添加到主屏幕。请复制链接到 Safari 打开，再用分享按钮添加。";
   }
+
+  installTip.hidden = false;
 }
 
 function readLocalSetting(key) {
@@ -2618,12 +2861,15 @@ function writeLocalSetting(key, value) {
 }
 
 installTipClose?.addEventListener("click", () => {
-  writeLocalSetting("creamInstallTipDismissed", "1");
+  writeLocalSetting(INSTALL_TIP_DISMISS_KEY, "1");
   if (installTip) installTip.hidden = true;
 });
 
 function showUpdatePrompt(worker) {
   waitingServiceWorker = worker || waitingServiceWorker;
+  if (updatePromptText) {
+    updatePromptText.textContent = `发现新版本。当前页面是 ${APP_VERSION}，点击刷新后即可使用最新功能。`;
+  }
   if (updatePrompt) updatePrompt.hidden = false;
 }
 
@@ -2633,6 +2879,43 @@ refreshAppButton?.addEventListener("click", () => {
     return;
   }
   window.location.reload();
+});
+
+async function checkForAppUpdate(showFeedback = false) {
+  if (!("serviceWorker" in navigator) || !location.protocol.startsWith("http")) {
+    if (showFeedback) setStatus("当前打开方式不支持检查更新，请部署到 HTTPS 后再试。");
+    return;
+  }
+
+  try {
+    const registration = activeServiceWorkerRegistration || await navigator.serviceWorker.getRegistration();
+    if (!registration) {
+      if (showFeedback) setStatus("正在启用离线缓存，请刷新一次后再检查更新。");
+      return;
+    }
+
+    activeServiceWorkerRegistration = registration;
+    if (registration.waiting) {
+      showUpdatePrompt(registration.waiting);
+      return;
+    }
+
+    if (showFeedback) setStatus(`正在检查更新，当前版本 ${APP_VERSION}...`);
+    await registration.update();
+
+    if (registration.waiting) {
+      showUpdatePrompt(registration.waiting);
+    } else if (showFeedback) {
+      setStatus(`已检查更新：当前已是 ${APP_VERSION}。`);
+    }
+  } catch (error) {
+    console.warn("Update check failed:", error);
+    if (showFeedback) setStatus("检查更新失败，请稍后刷新页面再试。");
+  }
+}
+
+checkUpdateButton?.addEventListener("click", () => {
+  checkForAppUpdate(true);
 });
 
 function registerServiceWorkerForUpdates() {
@@ -2645,6 +2928,8 @@ function registerServiceWorkerForUpdates() {
   });
 
   navigator.serviceWorker.register("sw.js").then((registration) => {
+    activeServiceWorkerRegistration = registration;
+
     if (registration.waiting && navigator.serviceWorker.controller) {
       showUpdatePrompt(registration.waiting);
     }
@@ -2659,6 +2944,8 @@ function registerServiceWorkerForUpdates() {
         }
       });
     });
+
+    window.setTimeout(() => checkForAppUpdate(false), 1200);
   }).catch((error) => {
     console.warn("Service worker registration failed:", error);
   });

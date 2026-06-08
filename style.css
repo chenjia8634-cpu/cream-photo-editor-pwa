@@ -79,8 +79,14 @@ h1 {
   font-weight: 720;
 }
 
-.text-link-button {
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-top: 10px;
+}
+
+.text-link-button {
   padding: 0;
   border: 0;
   color: var(--muted);
@@ -190,6 +196,36 @@ h2 {
   font-size: 15px;
   font-weight: 680;
 }
+
+.custom-preset-panel {
+  margin: -2px 0 16px;
+  padding: 12px;
+  border: 1px solid rgba(157, 121, 83, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 246, 231, 0.72);
+}
+
+.custom-preset-select {
+  margin-bottom: 10px;
+}
+
+.custom-preset-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.custom-preset-actions .small-action-button {
+  margin: 0;
+}
+
+.custom-preset-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 
 .strength-slider {
   width: 100%;
@@ -796,6 +832,10 @@ video.batch-thumb {
 
   .tip-close {
     width: 100%;
+  }
+
+  .custom-preset-actions {
+    grid-template-columns: 1fr;
   }
 }
 
