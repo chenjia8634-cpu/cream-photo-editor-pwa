@@ -56,7 +56,7 @@ const refreshAppButton = document.querySelector("#refreshAppButton");
 
 const MAX_EXPORT_EDGE = 6000;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.21";
+const APP_VERSION = "v3.22";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -243,6 +243,7 @@ const CHANGELOG = [
   ["v3.19", "增加自定义微调参数、防过曝检测与自动高光保护，并增加添加到主屏幕提示和发现新版本后的刷新提示。"],
   ["v3.20", "增加自定义微调自动预览、浏览器本地保存自定义预设、手动检查更新和更清晰的新版本刷新提示，并优化 iPhone Safari 与微信内打开时的添加到主屏幕提示逻辑。"],
   ["v3.21", "优化页面布局，上传后优先展示大预览图，将自定义预设折叠收纳，并让手动检查更新有明确的按钮和状态反馈。"],
+  ["v3.22", "将页面标题精简为图片自动调色工具，并把上传入口文案从选择产品图调整为选择图片。"],
 ];
 
 function setPresetStrength(percent) {
