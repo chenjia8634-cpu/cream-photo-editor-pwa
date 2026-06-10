@@ -54,9 +54,9 @@ const previewGrid = document.querySelector(".preview-grid");
 const updatePromptText = document.querySelector("#updatePromptText");
 const refreshAppButton = document.querySelector("#refreshAppButton");
 
-const MAX_EXPORT_EDGE = 6000;
+const MAX_EXPORT_EDGE = Number.POSITIVE_INFINITY;
 const MAX_PREVIEW_EDGE = 1400;
-const APP_VERSION = "v3.22";
+const APP_VERSION = "v3.23";
 const COMPAT_VIDEO_EDGE = 720;
 const COMPAT_VIDEO_FPS = 24;
 const COMPAT_VIDEO_BITRATE = 6_000_000;
@@ -244,6 +244,7 @@ const CHANGELOG = [
   ["v3.20", "增加自定义微调自动预览、浏览器本地保存自定义预设、手动检查更新和更清晰的新版本刷新提示，并优化 iPhone Safari 与微信内打开时的添加到主屏幕提示逻辑。"],
   ["v3.21", "优化页面布局，上传后优先展示大预览图，将自定义预设折叠收纳，并让手动检查更新有明确的按钮和状态反馈。"],
   ["v3.22", "将页面标题精简为图片自动调色工具，并把上传入口文案从选择产品图调整为选择图片。"],
+  ["v3.23", "图片导出保持原图像素尺寸，不再因为导出边长上限缩小分辨率，减少调色后图片尺寸变小的问题。"],
 ];
 
 function setPresetStrength(percent) {
